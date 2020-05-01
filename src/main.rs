@@ -6,10 +6,11 @@ extern crate rustc_serialize;
 extern crate tokio;
 extern crate futures;
 
-use std::collections::HashMap;
 use config::*;
 use glob::glob;
+use std::collections::HashMap;
 
+mod opts;
 mod errors;
 mod utils;
 
@@ -22,11 +23,30 @@ async fn main() {
                    .map(|path| File::from(path.unwrap()))
                    .collect::<Vec<_>>())
         .unwrap();
+        
+    let config = match settings.try_into::<HashMap<String, String>>() {
+      Ok(config) => config,
+      Err(error) => panic!("Error: {:?}", error)
+    };
 
-    // Print out our settings (as a HashMap)
-    println!("\n{:?} \n\n-----------",
-             settings.try_into::<HashMap<String, String>>().unwrap());
+    let _enable_cli_options = match config.get("cli_options") {
+      Some(value) => value.to_string(),
+      None => String::new()
+    };
+    let enable_cli_options = _enable_cli_options.parse::<bool>().unwrap();
+    println!("Value: {:?}", enable_cli_options);
 
+    // Load options from CLI
+    if enable_cli_options {
+      let _conf = match opts::parse_args() {
+        Ok(conf) => conf,
+        Err(error) => panic!("Error: {:?}", error)
+      };
+      
+      println!("Conf: {}", _conf);
+    }
+
+    // Main execution
     let run_mode = std::env::var("RUN_MODE");
     match run_mode {
       Ok(v) => println!("Run mode: {:?}", v),

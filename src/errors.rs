@@ -25,4 +25,11 @@ pub enum Error {
     Hyper(hyper::Error),
     Serde(error::Error),
     Io(io::Error),
+    UnexpectedJson,
+    NoResult,
+    NoMembers,
+    UserNotFound,
+    InvalidArgError,
+    HelpMenuRequested,
+    CantConvertJsonToObj,
 }
