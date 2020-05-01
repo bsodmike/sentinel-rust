@@ -25,7 +25,18 @@ async fn fetch_url(url: hyper::Uri) -> Result<hyper::Response<hyper::Body>, Box<
   Ok(response)
 }
 
-pub async fn post(url: &'static str, payload: hyper::Body) -> Result<hyper::Response<hyper::Body>, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn post(url: &'static str, payload: hyper::Body) -> Result<(hyper::Response<hyper::Body>, serde_json::Value), Box<dyn std::error::Error + Send + Sync>> {
+  let mut response = post_url(url, payload).await.unwrap();
+
+  let body = hyper::body::to_bytes(response.body_mut()).await.unwrap();
+
+  let body_string = String::from_utf8_lossy(&body);
+  let json_value = serde_json::from_str(&body_string)?;
+
+  Ok((response, json_value))
+}
+
+async fn post_url(url: &'static str, payload: hyper::Body) -> Result<hyper::Response<hyper::Body>, Box<dyn std::error::Error + Send + Sync>> {
   let req = Request::builder()
     .method(Method::POST)
     .uri(url)
@@ -35,7 +46,6 @@ pub async fn post(url: &'static str, payload: hyper::Body) -> Result<hyper::Resp
   let https = HttpsConnector::new();
   let client = Client::builder().build::<_, hyper::Body>(https);
   let response = client.request(req).await?;
-  println!("Response: {}", response.status());
 
   Ok(response)
 }

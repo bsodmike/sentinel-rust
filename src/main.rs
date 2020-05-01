@@ -69,10 +69,10 @@ async fn main() {
     });
     let payload = hyper::Body::from(data.to_string());
     
-    let resp = match utils::post(url, payload).await {
+    let (resp, body_json): (hyper::Response<hyper::Body>, serde_json::Value) = match utils::post(url, payload).await {
       Ok(result) => result,
       Err(error) => panic!("Error whilst posting JSON to url: {}, error: {:?}", url, error)
     };
     println!("Response: {:?}", resp);
-
+    println!("Body: {:?}", body_json);
 }
