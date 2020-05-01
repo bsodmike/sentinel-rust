@@ -8,6 +8,12 @@ impl From<hyper::Error> for Error {
     }
 }
 
+impl From<hyper::http::Error> for Error {
+    fn from(err: hyper::http::Error) -> Error {
+        Error::HyperHTTP(err)
+    }
+}
+
 impl From<error::Error> for Error {
     fn from(err: error::Error) -> Error {
         Error::Serde(err)
@@ -23,6 +29,7 @@ impl From<io::Error> for Error {
 #[derive(Debug)]
 pub enum Error {
     Hyper(hyper::Error),
+    HyperHTTP(hyper::http::Error),
     Serde(error::Error),
     Io(io::Error),
     UnexpectedJson,

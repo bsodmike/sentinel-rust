@@ -1,4 +1,5 @@
-use hyper::{Client};
+use hyper::{Client, Request, Method, Body};
+use hyper_tls::HttpsConnector;
 use crate::errors::Error;
 
 pub async fn get(url: &'static str) -> Result<serde_json::Value, Error> {
@@ -15,7 +16,8 @@ pub async fn get(url: &'static str) -> Result<serde_json::Value, Error> {
 }
 
 async fn fetch_url(url: hyper::Uri) -> Result<hyper::Response<hyper::Body>, Box<dyn std::error::Error + Send + Sync>> {
-  let client = Client::new();
+  let https = HttpsConnector::new();
+  let client = Client::builder().build::<_, hyper::Body>(https);
   let response: hyper::Response<hyper::Body> = client.get(url).await?;
   // println!("Response: {}", response.status());
   // println!("Headers: {:#?}\n", response.headers());
@@ -23,16 +25,17 @@ async fn fetch_url(url: hyper::Uri) -> Result<hyper::Response<hyper::Body>, Box<
   Ok(response)
 }
 
-// pub fn post(url: &str, payload: &str) -> Result<(), Error> {
-//     let client = hyper::Client::new();
-//     let mut headers = Headers::new();
-//     headers.set(
-//         ContentType(Mime(TopLevel::Application, SubLevel::WwwFormUrlEncoded, vec![(Attr::Charset, Value::Utf8)]))
-//     );
+pub async fn post(url: &'static str, payload: hyper::Body) -> Result<hyper::Response<hyper::Body>, Box<dyn std::error::Error + Send + Sync>> {
+  let req = Request::builder()
+    .method(Method::POST)
+    .uri(url)
+    .header("content-type", "application/json")
+    .body(payload)?;
 
-//     let mut res = client.post(url).headers(headers).body(payload).send()?;
-//     let mut buffer = String::new();
-//     (res.read_to_string(&mut buffer)?;
-//     println!("{}", buffer);
-//     Ok(())
-// }
+  let https = HttpsConnector::new();
+  let client = Client::builder().build::<_, hyper::Body>(https);
+  let response = client.request(req).await?;
+  println!("Response: {}", response.status());
+
+  Ok(response)
+}

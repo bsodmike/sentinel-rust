@@ -53,11 +53,26 @@ async fn main() {
       Err(e) => println!("Run mode error: {:?}", e)
     }
 
-    let url = "http://jsonplaceholder.typicode.com/todos/1";
+    let mut url = "https://jsonplaceholder.typicode.com/todos/1";
     let response: serde_json::Value = match utils::get(url).await {
       Ok(result) => result,
       Err(error) => panic!("Error whilst fetching url: {}, error: {:?}", url, error)
     };
 
     println!("Response: {:?}", response);
+
+    url = "https://jsonplaceholder.typicode.com/posts";
+    let data =  serde_json::json!({
+      "title": "John Doe",
+      "body": "bar",
+      "userId": 1
+    });
+    let payload = hyper::Body::from(data.to_string());
+    
+    let resp = match utils::post(url, payload).await {
+      Ok(result) => result,
+      Err(error) => panic!("Error whilst posting JSON to url: {}, error: {:?}", url, error)
+    };
+    println!("Response: {:?}", resp);
+
 }
