@@ -51,12 +51,6 @@ async fn main() {
       println!("Conf: {}", _conf);
     }
 
-    let slack_key: String = match configure::fetch::<String>(String::from("slack_key")) {
-      Ok(value) => value,
-      Err(error) => panic!(),
-    };
-    println!("Slack key: {:#?}", slack_key);
-
     // Main execution
     let run_mode = std::env::var("RUN_MODE");
     match run_mode {

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::configure;
 
 pub fn run() {
   let config = match crate::CONFIG.clone().try_into::<HashMap<String, String>>() {
@@ -6,10 +7,10 @@ pub fn run() {
     Err(error) => panic!("Error: {:?}", error)
   };
 
-  let _enable_cli_options = match config.get("cli_options") {
-    Some(value) => value.to_string(),
-    None => String::new()
+  let slack_key: String = match configure::fetch::<String>(String::from("slack_key")) {
+    Ok(value) => value,
+    Err(error) => panic!(),
   };
-  let enable_cli_options = _enable_cli_options.parse::<bool>().unwrap();
-  println!("Value: {:?}", enable_cli_options);
+  
+  println!("Slack key: {:#?}", slack_key);
 }
