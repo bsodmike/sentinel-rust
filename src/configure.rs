@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use crate::errors::Error;
+use crate::configure;
 
 pub struct ConfigInfo<V> {
   flag: V
 }
 
-
-pub trait FetchFromConfig<T> {
+pub trait FetchFromConfig<T>: private::Sealed {
   fn fetch_config(&self, config: &HashMap<String, String>) -> T;
 }
 
@@ -36,7 +36,7 @@ where
   }
 }
 
-impl<V> FetchFromConfig<String> for ConfigInfo<V>
+impl<V> FetchFromConfig<String> for configure::ConfigInfo<V>
 where
   V: std::fmt::Debug + std::fmt::Display + std::cmp::Eq + std::hash::Hash
 {
@@ -50,6 +50,12 @@ where
   }
 }
 
+// Prevent users from implementing the Index trait.
+mod private {
+  pub trait Sealed {}
+  impl<V> Sealed for super::ConfigInfo<V> {}
+}
+
 pub fn fetch<T>(flag: std::string::String) -> Result<T, Error> 
 where
   ConfigInfo<String>: FetchFromConfig<T>
@@ -59,7 +65,7 @@ where
     Err(error) => panic!("Error: {:?}", error)
   };
 
-  let mut cli_info = ConfigInfo {
+  let cli_info = ConfigInfo {
     flag: String::from(flag)
   };
 
