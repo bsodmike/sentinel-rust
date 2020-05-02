@@ -31,23 +31,12 @@ static CONFIG: Lazy<config::Config> = Lazy::new(|| {
 
 #[tokio::main]
 async fn main() {
-    let config = match CONFIG.clone().try_into::<HashMap<String, String>>() {
-      Ok(config) => config,
-      Err(error) => panic!("Error: {:?}", error)
-    };
-
-    let enable_cli_options: bool = match configure::fetch::<bool>(String::from("cli_options")) {
-      Ok(value) => value,
-      Err(error) => panic!(),
-    };
+    let enable_cli_options: bool = configure::fetch::<bool>(String::from("cli_options"))
+      .unwrap_or(false);
     
     // Load options from CLI
     if enable_cli_options {
-      let _conf = match opts::parse_args() {
-        Ok(conf) => conf,
-        Err(error) => panic!("Error: {:?}", error)
-      };
-      
+      let _conf = opts::parse_args().unwrap();
       println!("Conf: {}", _conf);
     }
 
