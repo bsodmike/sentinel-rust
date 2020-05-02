@@ -1,3 +1,4 @@
 --- 
-  cli_options: false
   debug: true
+  cli_options: false
+  slack_key: "adsadasdsdad"

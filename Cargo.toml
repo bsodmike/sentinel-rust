@@ -17,3 +17,4 @@ futures = "^0.3.4"
 tokio = { version = "0.2.20", features = ["full"] }
 getopts = "^0.2.19"
 indicatif = "^0.13.0"
+once_cell = "^1.3.1"

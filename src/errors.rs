@@ -26,6 +26,7 @@ impl From<io::Error> for Error {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum Error {
     Hyper(hyper::Error),
