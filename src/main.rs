@@ -14,6 +14,7 @@ use once_cell::sync::{Lazy};
 
 mod opts;
 mod errors;
+mod configure;
 mod utils;
 mod slack;
 
@@ -28,51 +29,6 @@ static CONFIG: Lazy<config::Config> = Lazy::new(|| {
   settings
 });
 
-trait FetchFromConfig<U> {
-  fn fetch_boolean(&self, config: &HashMap<String, String>) -> U;
-}
-
-struct ConfigInfo<V> {
-  flag: V
-}
-
-impl<V> FetchFromConfig<bool> for ConfigInfo<V>
-where V: std::fmt::Debug + std::fmt::Display + std::cmp::Eq + std::hash::Hash {
-  fn fetch_boolean(&self, config: &HashMap<String, String>) -> bool {
-    let value = match config.get(&self.flag.to_string()) {
-      Some(value) => value.to_string(),
-      None => String::new()
-    };
-
-    let mut result: bool = false;
-
-    if value.eq("true") || value.eq("false") {
-      result = match value.parse::<bool>() {
-        Ok(value) => value,
-        Err(error) => panic!(
-          "Unknown error parsing configuration flag {}. Err: {:#?}", 
-          &self.flag, error
-        )
-      };
-    }
-
-  result
-  }
-}
-
-impl<V> FetchFromConfig<String> for ConfigInfo<V>
-where V: std::fmt::Debug + std::fmt::Display + std::cmp::Eq + std::hash::Hash {
-  fn fetch_boolean(&self, config: &HashMap<String, String>) -> String {
-    let value = match config.get(&self.flag.to_string()) {
-      Some(value) => value.to_string(),
-      None => String::new()
-    };
-
-    value
-  }
-}
-
-
 #[tokio::main]
 async fn main() {
     let config = match CONFIG.clone().try_into::<HashMap<String, String>>() {
@@ -80,10 +36,10 @@ async fn main() {
       Err(error) => panic!("Error: {:?}", error)
     };
 
-    let mut cli_info = ConfigInfo {
-      flag: String::from("cli_options")
+    let enable_cli_options: bool = match configure::fetch::<bool>(String::from("cli_options")) {
+      Ok(value) => value,
+      Err(error) => panic!(),
     };
-    let enable_cli_options: bool = cli_info.fetch_boolean(&config);
     
     // Load options from CLI
     if enable_cli_options {
@@ -95,10 +51,10 @@ async fn main() {
       println!("Conf: {}", _conf);
     }
 
-    cli_info = ConfigInfo {
-      flag: String::from("slack_key")
+    let slack_key: String = match configure::fetch::<String>(String::from("slack_key")) {
+      Ok(value) => value,
+      Err(error) => panic!(),
     };
-    let slack_key: String = cli_info.fetch_boolean(&config);
     println!("Slack key: {:#?}", slack_key);
 
     // Main execution
