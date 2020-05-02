@@ -80,30 +80,26 @@ async fn main() {
       Err(error) => panic!("Error: {:?}", error)
     };
 
-    let test = ConfigInfo {
+    let mut cli_info = ConfigInfo {
       flag: String::from("cli_options")
     };
-    let bool_options: bool = test.fetch_boolean(&config);
-    let string_options: String = test.fetch_boolean(&config);
-
-    // let _enable_cli_options = match config.get("cli_options") {
-    //   Some(value) => value.to_string(),
-    //   None => String::new()
-    // };
-    // let enable_cli_options = _enable_cli_options.parse::<bool>().unwrap();
-    println!("Enable CLI Options: {:?}", bool_options);
-    println!("Enable CLI Options (as String): {:?}", string_options);
-
-
-    // // Load options from CLI
-    // if enable_cli_options {
-    //   let _conf = match opts::parse_args() {
-    //     Ok(conf) => conf,
-    //     Err(error) => panic!("Error: {:?}", error)
-    //   };
+    let enable_cli_options: bool = cli_info.fetch_boolean(&config);
+    
+    // Load options from CLI
+    if enable_cli_options {
+      let _conf = match opts::parse_args() {
+        Ok(conf) => conf,
+        Err(error) => panic!("Error: {:?}", error)
+      };
       
-    //   println!("Conf: {}", _conf);
-    // }
+      println!("Conf: {}", _conf);
+    }
+
+    cli_info = ConfigInfo {
+      flag: String::from("slack_key")
+    };
+    let slack_key: String = cli_info.fetch_boolean(&config);
+    println!("Slack key: {:#?}", slack_key);
 
     // Main execution
     let run_mode = std::env::var("RUN_MODE");
