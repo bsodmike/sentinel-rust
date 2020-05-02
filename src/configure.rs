@@ -50,7 +50,7 @@ where
   }
 }
 
-// Prevent users from implementing the Index trait.
+// Prevent users from implementing the FetchFromConfig trait.
 mod private {
   pub trait Sealed {}
   impl<V> Sealed for super::ConfigInfo<V> {}
