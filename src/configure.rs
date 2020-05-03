@@ -12,7 +12,7 @@ pub trait FetchFromConfig<T>: private::Sealed {
 
 impl<V> FetchFromConfig<bool> for ConfigInfo<V>
 where
-  V: std::fmt::Debug + std::fmt::Display + std::cmp::Eq + std::hash::Hash
+  V: std::fmt::Debug + std::fmt::Display
 {
   fn fetch_config(&self, config: &HashMap<String, String>) -> bool {
     let value = match config.get(&self.flag.to_string()) {
@@ -38,7 +38,7 @@ where
 
 impl<V> FetchFromConfig<String> for configure::ConfigInfo<V>
 where
-  V: std::fmt::Debug + std::fmt::Display + std::cmp::Eq + std::hash::Hash
+  V: std::fmt::Debug + std::fmt::Display
 {
   fn fetch_config(&self, config: &HashMap<String, String>) -> String {
     let value = match config.get(&self.flag.to_string()) {
@@ -58,6 +58,8 @@ mod private {
 
 pub fn fetch<T>(flag: std::string::String) -> Result<T, Error> 
 where
+  // Trait bound to implement FetchFromConfig<T> for ConfigInfo<String>,
+  // to allow it to call `fetch_config` as defined by the trait, returning T.
   ConfigInfo<String>: FetchFromConfig<T>
 {
   let config = match crate::CONFIG.clone().try_into::<HashMap<String, String>>() {
