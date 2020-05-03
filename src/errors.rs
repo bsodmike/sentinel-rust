@@ -17,6 +17,7 @@ pub enum Error {
   InvalidArgError,
   HelpMenuRequested,
   CantConvertJsonToObj,
+  NotImplementedError,
 }
 
 impl From<hyper::Error> for Error {
