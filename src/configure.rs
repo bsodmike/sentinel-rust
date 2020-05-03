@@ -36,7 +36,7 @@ where
   }
 }
 
-impl<V> FetchFromConfig<String> for configure::ConfigInfo<V>
+impl<V> FetchFromConfig<String> for ConfigInfo<V>
 where
   V: std::fmt::Debug + std::fmt::Display
 {

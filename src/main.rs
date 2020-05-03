@@ -6,6 +6,7 @@ extern crate rustc_serialize;
 extern crate tokio;
 extern crate futures;
 extern crate once_cell;
+extern crate mysql;
 
 use config::*;
 use glob::glob;
@@ -16,6 +17,7 @@ mod errors;
 mod configure;
 mod utils;
 mod slack;
+mod database;
 
 static CONFIG: Lazy<config::Config> = Lazy::new(|| {
   let mut glob_path = "conf/production/*";
@@ -51,6 +53,23 @@ async fn main() {
       let _conf = opts::parse_args().unwrap();
       println!("Conf: {}", _conf);
     }
+
+
+    let result1 = database::fetch::<database::ConnectorMysql, Vec<String>>(&database::ConnectorMysql{});
+
+    let mut message = String::new();
+    for item in &result1 {
+      message.push_str(item);
+      message.push_str(", ");
+    }
+
+    println!("MySql parsed message: {}", message);
+
+    let result2 = database::fetch::<database::ConnectorPostgres, String>(&database::ConnectorPostgres{});
+
+    print!("Postgres Result: {:#?}", result2);
+
+    
 
     // let mut url = "https://jsonplaceholder.typicode.com/todos/1";
     // let response: serde_json::Value = match utils::get(url).await {
