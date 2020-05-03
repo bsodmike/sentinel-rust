@@ -1,16 +1,36 @@
-use std::collections::HashMap;
+use hyper::{Response, Body};
 use crate::configure;
+use crate::utils;
+use crate::errors;
 
-pub fn run() {
-  let config = match crate::CONFIG.clone().try_into::<HashMap<String, String>>() {
-    Ok(config) => config,
-    Err(error) => panic!("Error: {:?}", error)
+pub async fn notify(data: &serde_json::Value) -> Result<(Response<Body>, serde_json::Value), Box<dyn std::error::Error + Send + Sync>> {
+  let slack_url: String = configure::fetch::<String>(String::from("slack_url")).unwrap();
+  println!("Slack key: {:#?}", slack_url);
+
+  let payload = Body::from(data.to_string());
+
+  let (response, body): (Response<Body>, hyper::body::Bytes) = match utils::post(&slack_url, payload).await {
+    Ok(result) => result,
+    Err(error) => panic!("Error [slack]: {:#?}", error)
   };
 
-  let slack_key: String = match configure::fetch::<String>(String::from("slack_key")) {
+  let body_string = String::from_utf8_lossy(&body);
+
+  // Patch for success from Slack
+  if response.status().eq(&200) && body_string.eq("ok") {
+    let new_string = serde_json::json!({ "status": "ok"});
+    return Ok((response, new_string))
+  }
+
+  // Handle invalid token error
+  if response.status().eq(&403) && body_string.eq("invalid_token") {
+    panic!("Invalid Slack token used! Err: {:#?}", errors::Error::InvalidTokenError);
+  }
+
+  let json_value = match serde_json::from_str(&body_string) {
     Ok(value) => value,
-    Err(error) => panic!(),
+    Err(error) => panic!("Err: parsing JSON {:#?} / body: {:#?}", error, body_string)
   };
-  
-  println!("Slack key: {:#?}", slack_key);
+
+  Ok((response, json_value))
 }
