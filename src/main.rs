@@ -9,7 +9,6 @@ extern crate once_cell;
 
 use config::*;
 use glob::glob;
-use std::collections::HashMap;
 use once_cell::sync::{Lazy};
 
 mod opts;
@@ -60,21 +59,6 @@ async fn main() {
     // };
 
     // println!("Response: {:?}", response);
-
-    // url = "https://jsonplaceholder.typicode.com/posts";
-    // let data =  serde_json::json!({
-    //   "title": "John Doe",
-    //   "body": "bar",
-    //   "userId": 1
-    // });
-    // let payload = hyper::Body::from(data.to_string());
-    
-    // let (resp, body_json): (hyper::Response<hyper::Body>, serde_json::Value) = match utils::post(url, payload).await {
-    //   Ok(result) => result,
-    //   Err(error) => panic!("Error whilst posting JSON to url: {}, error: {:?}", url, error)
-    // };
-    // println!("Response: {:#?}", resp);
-    // println!("Body: {:#?}", body_json);
 
     let data =  serde_json::json!({
       "blocks": [

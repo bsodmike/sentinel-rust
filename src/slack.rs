@@ -5,8 +5,6 @@ use crate::errors;
 
 pub async fn notify(data: &serde_json::Value) -> Result<(Response<Body>, serde_json::Value), Box<dyn std::error::Error + Send + Sync>> {
   let slack_url: String = configure::fetch::<String>(String::from("slack_url")).unwrap();
-  println!("Slack key: {:#?}", slack_url);
-
   let payload = Body::from(data.to_string());
 
   let (response, body): (Response<Body>, hyper::body::Bytes) = match utils::post(&slack_url, payload).await {

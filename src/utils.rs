@@ -4,7 +4,9 @@ use crate::errors::Error;
 
 pub async fn get(url: &'static str) -> Result<serde_json::Value, Error> {
     let uri = hyper::Uri::from_static(url);
-    let mut response = fetch_url(uri).await.unwrap();
+    let https = HttpsConnector::new();
+    let client = Client::builder().build::<_, Body>(https);
+    let mut response: Response<Body> = client.get(uri).await.unwrap();
 
     let body = hyper::body::to_bytes(response.body_mut()).await.unwrap();
     // println!("{} {:?}", response.status(), body);
@@ -15,25 +17,7 @@ pub async fn get(url: &'static str) -> Result<serde_json::Value, Error> {
     Ok(json_value)
 }
 
-async fn fetch_url(url: hyper::Uri) -> Result<Response<Body>, Box<dyn std::error::Error + Send + Sync>> {
-  let https = HttpsConnector::new();
-  let client = Client::builder().build::<_, Body>(https);
-  let response: Response<Body> = client.get(url).await?;
-  // println!("Response: {}", response.status());
-  // println!("Headers: {:#?}\n", response.headers());
-
-  Ok(response)
-}
-
 pub async fn post(url: &String, payload: Body) -> Result<(Response<Body>, hyper::body::Bytes), Box<dyn std::error::Error + Send + Sync>> {
-  let mut response = post_url(url, payload).await.unwrap();
-
-  let body = hyper::body::to_bytes(response.body_mut()).await.unwrap();
-
-  Ok((response, body))
-}
-
-async fn post_url(url: &String, payload: Body) -> Result<Response<Body>, Box<dyn std::error::Error + Send + Sync>> {
   let req = Request::builder()
     .method(Method::POST)
     .uri(url)
@@ -42,7 +26,9 @@ async fn post_url(url: &String, payload: Body) -> Result<Response<Body>, Box<dyn
 
   let https = HttpsConnector::new();
   let client = Client::builder().build::<_, Body>(https);
-  let response = client.request(req).await?;
+  let mut response = client.request(req).await.unwrap();
 
-  Ok(response)
+  let body = hyper::body::to_bytes(response.body_mut()).await.unwrap();
+
+  Ok((response, body))
 }
