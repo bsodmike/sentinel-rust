@@ -19,9 +19,22 @@ mod utils;
 mod slack;
 
 static CONFIG: Lazy<config::Config> = Lazy::new(|| {
+  let mut glob_path = "conf/production/*";
   let mut settings = Config::default();
+
+  let key = "RUST_ENV";
+  let run_mode = match std::env::var(key) {
+    Ok(value) => value,
+    Err(_) => String::new()
+  };
+
+  if run_mode.eq("development") {
+    glob_path = "conf/development/*";
+    println!("Run mode {}", run_mode);
+  }
+  
   settings
-      .merge(glob("conf/*")
+      .merge(glob(glob_path)
                   .unwrap()
                   .map(|path| File::from(path.unwrap()))
                   .collect::<Vec<_>>())
@@ -38,13 +51,6 @@ async fn main() {
     if enable_cli_options {
       let _conf = opts::parse_args().unwrap();
       println!("Conf: {}", _conf);
-    }
-
-    // Main execution
-    let run_mode = std::env::var("RUN_MODE");
-    match run_mode {
-      Ok(v) => println!("Run mode: {:?}", v),
-      Err(e) => println!("Run mode error: {:?}", e)
     }
 
     // let mut url = "https://jsonplaceholder.typicode.com/todos/1";

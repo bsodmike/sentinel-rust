@@ -27,6 +27,11 @@ pub async fn notify(data: &serde_json::Value) -> Result<(Response<Body>, serde_j
     panic!("Invalid Slack token used! Err: {:#?}", errors::Error::InvalidTokenError);
   }
 
+  // Handle invalid team error
+  if response.status().eq(&404) && body_string.eq("no_team") {
+    panic!("Invalid team specified within token! Err: {:#?}", errors::Error::InvalidTokenError);
+  }
+
   let json_value = match serde_json::from_str(&body_string) {
     Ok(value) => value,
     Err(error) => panic!("Err: parsing JSON {:#?} / body: {:#?}", error, body_string)
