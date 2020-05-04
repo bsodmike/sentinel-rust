@@ -8,6 +8,7 @@ pub enum Error {
   Hyper(hyper::Error),
   HyperHTTP(hyper::http::Error),
   Serde(error::Error),
+  Sqlx(sqlx::Error),
   Io(io::Error),
   UnexpectedJson,
   NoResult,
@@ -41,6 +42,12 @@ impl From<error::Error> for Error {
 impl From<io::Error> for Error {
   fn from(err: io::Error) -> Error {
       Error::Io(err)
+  }
+}
+
+impl From<sqlx::Error> for Error {
+  fn from(err: sqlx::Error) -> Error {
+      Error::Sqlx(err)
   }
 }
 

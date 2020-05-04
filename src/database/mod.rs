@@ -1,6 +1,11 @@
-use crate::mysql::*;
-use crate::mysql::prelude::*;
+#[macro_use]
+use sqlx::mysql::MySqlPool;
+use crate::sqlx::prelude::MySqlQueryAs;
+use crate::sqlx::Cursor;
+use crate::sqlx::Row;
 use crate::errors::Error;
+use async_trait::async_trait;
+use crate::configure;
 
 #[derive(Debug)]
 pub struct ConnectorMysql {
@@ -17,37 +22,71 @@ struct Connection {
 
 }
 
+#[async_trait]
 pub trait Fetch<ReturnType> {
-  fn call_db(&self) -> ReturnType;
+  async fn call_db<'a>(&'a self) -> ReturnType;
 }
 
-impl Fetch<Vec<String>> for ConnectorMysql
-{
-  fn call_db(&self) -> Vec<String> {
-    let url = "mysql://root:a@127.0.0.1:3306/";
-    let pool = Pool::new(url).unwrap();
-    let mut conn = pool.get_conn().unwrap();
-  
-    let query: &str = r#"SHOW DATABASES"#;
-    let result = match conn.query::<String, &str>(query) {
-      Ok(value) => value,
-      Err(error) => panic!("Err: {} making query {}", error, query)
-    };
+#[derive(Debug)]
+pub struct Data {
+  master_host: String,
+  master_user: String,
+  slave_io_running: String,
+  slave_sql_running: String,
+  master_log_file: String,
+  read_master_log_pos: u64,
+  relay_log_file: String,
+  relay_log_pos: u64,
+  relay_master_log_file: String,
+  seconds_behind_master: u64,
+}
 
-    result
+#[async_trait]
+impl Fetch<Result<Vec<Data>, Error>> for ConnectorMysql
+{
+  async fn call_db<'a>(&'a self) -> Result<Vec<Data>, Error> {
+    let mysql_url: String = configure::fetch::<String>(String::from("mysql_url")).unwrap();
+    let url: &str = &mysql_url[..];
+    let pool = sqlx::MySqlPool::builder()
+      .build(&url).await?;
+    // println!("Pool: {:#?}", pool);
+
+    let sql = "SHOW SLAVE STATUS";
+    let mut cursor = sqlx::query(sql).fetch(&pool);
+    let mut result = Vec::new();
+    while let Some(row) = cursor.next().await? {
+        let data = Data {
+          master_host: row.get("Master_Host"),
+          master_user: row.get("Master_User"),
+          slave_io_running: row.get("Slave_IO_Running"),
+          slave_sql_running: row.get("Slave_SQL_Running"),
+          master_log_file: row.get("Master_Log_File"),
+          read_master_log_pos: row.get("Read_Master_Log_Pos"),
+          relay_log_file: row.get("Relay_Log_File"),
+          relay_log_pos: row.get("Relay_Log_Pos"),
+          relay_master_log_file: row.get("Relay_Master_Log_File"),
+          seconds_behind_master: row.get("Seconds_Behind_Master"),
+        };
+        result.push(data);
+    }
+    
+    Ok(result)
   }
 } 
 
-impl Fetch<String> for ConnectorPostgres
+#[async_trait]
+impl Fetch<Result<String, Error>> for ConnectorPostgres
 {
-  fn call_db(&self) -> String {
+  async fn call_db<'a>(&'a self) -> anyhow::Result<String, Error> {
     panic!("Err: {:#?}", Error::NotImplementedError)
   }
 }
 
-pub fn fetch<ConnectorType, ReturnType>(connector: &ConnectorType) -> ReturnType
+pub async fn fetch<ConnectorType: 'static, ReturnType>(connector: ConnectorType) -> ReturnType
 where
   ConnectorType: Fetch<ReturnType>
 {
-  connector.call_db()
+  let result = connector.call_db().await;
+
+  result
 }

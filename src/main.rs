@@ -6,11 +6,14 @@ extern crate rustc_serialize;
 extern crate tokio;
 extern crate futures;
 extern crate once_cell;
-extern crate mysql;
+extern crate sqlx;
+extern crate async_trait;
+extern crate anyhow;
 
 use config::*;
 use glob::glob;
 use once_cell::sync::{Lazy};
+use errors::Error;
 
 mod opts;
 mod errors;
@@ -54,20 +57,22 @@ async fn main() {
       println!("Conf: {}", _conf);
     }
 
+    
 
-    let result1 = database::fetch::<database::ConnectorMysql, Vec<String>>(&database::ConnectorMysql{});
+    let result1 = database::fetch::<database::ConnectorMysql, Result<Vec<database::Data>, Error>>(database::ConnectorMysql{}).await;
+    print!("MySQL Result: {:#?}", result1.unwrap());
 
-    let mut message = String::new();
-    for item in &result1 {
-      message.push_str(item);
-      message.push_str(", ");
-    }
+    // let mut message = String::new();
+    // for item in &result1 {
+    //   message.push_str(item);
+    //   message.push_str(", ");
+    // }
 
-    println!("MySql parsed message: {}", message);
+    // println!("MySql parsed message: {}", message);
 
-    let result2 = database::fetch::<database::ConnectorPostgres, String>(&database::ConnectorPostgres{});
+    let result2 = database::fetch::<database::ConnectorPostgres, Result<String, Error>>(database::ConnectorPostgres{}).await;
 
-    print!("Postgres Result: {:#?}", result2);
+    print!("Postgres Result: {:#?}", result2.unwrap());
 
     
 
