@@ -1,4 +1,3 @@
-#[macro_use]
 use crate::sqlx::Cursor;
 use crate::sqlx::Row;
 use crate::errors::Error;

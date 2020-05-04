@@ -1,4 +1,3 @@
-use super::Error;
 use crate::slack;
 
 pub async fn notify_slack(message: &String) {
