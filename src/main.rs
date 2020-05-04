@@ -6,11 +6,13 @@ extern crate rustc_serialize;
 extern crate tokio;
 extern crate futures;
 extern crate once_cell;
-extern crate mysql;
+extern crate sqlx;
+extern crate async_trait;
 
 use config::*;
 use glob::glob;
 use once_cell::sync::{Lazy};
+use errors::Error;
 
 mod opts;
 mod errors;
@@ -20,7 +22,7 @@ mod slack;
 mod database;
 
 static CONFIG: Lazy<config::Config> = Lazy::new(|| {
-  let mut glob_path = "conf/production/*";
+  let mut glob_path = "conf/development/*";
   let mut settings = Config::default();
 
   let key = "RUST_ENV";
@@ -29,8 +31,8 @@ static CONFIG: Lazy<config::Config> = Lazy::new(|| {
     Err(_) => String::new()
   };
 
-  if run_mode.eq("development") {
-    glob_path = "conf/development/*";
+  if run_mode.eq("production") {
+    glob_path = "conf/production/*";
     println!("Run mode {}", run_mode);
   }
   
@@ -53,23 +55,28 @@ async fn main() {
       let _conf = opts::parse_args().unwrap();
       println!("Conf: {}", _conf);
     }
+   
 
-
-    let result1 = database::fetch::<database::ConnectorMysql, Vec<String>>(&database::ConnectorMysql{});
+    let result1 = database::fetch::<database::ConnectorMysql, Result<Vec<database::Data>, Error>>(database::ConnectorMysql{}).await.unwrap();
+    // println!("MySQL Result: {:#?}", result1);
 
     let mut message = String::new();
-    for item in &result1 {
-      message.push_str(item);
-      message.push_str(", ");
-    }
+    let data = &result1[0];
+    message.push_str(&String::from(format!("\\n\\nMaster host: {}\\n", &data.master_host[..])));
+    message.push_str(&String::from(format!("Master user: {}\\n", &data.master_user[..])));
+    message.push_str(&String::from(format!("Slave IO running: {}\\n", &data.slave_io_running[..])));
+    message.push_str(&String::from(format!("Slave SQL running: {}\\n", &data.slave_sql_running[..])));
+    message.push_str(&String::from(format!("Master log file: {}\\n", &data.master_log_file[..])));
+    message.push_str(&String::from(format!("Master log pos: {}\\n", data.read_master_log_pos)));
+    message.push_str(&String::from(format!("Relay log file: {}\\n", &data.relay_log_file[..])));
+    message.push_str(&String::from(format!("Relay log pos: {}\\n", data.relay_log_pos)));
+    message.push_str(&String::from(format!("Relay master log file: {}\\n", &data.relay_master_log_file[..])));
+    message.push_str(&String::from(format!("Slave seconds behind master: {}\\n\\n", data.seconds_behind_master)));
 
-    println!("MySql parsed message: {}", message);
+    println!("{}", message);
 
-    let result2 = database::fetch::<database::ConnectorPostgres, String>(&database::ConnectorPostgres{});
-
-    print!("Postgres Result: {:#?}", result2);
-
-    
+    // let result2 = database::fetch::<database::ConnectorPostgres, Result<String, Error>>(database::ConnectorPostgres{}).await;
+    // print!("Postgres Result: {:#?}", result2.unwrap());  
 
     // let mut url = "https://jsonplaceholder.typicode.com/todos/1";
     // let response: serde_json::Value = match utils::get(url).await {
@@ -79,17 +86,37 @@ async fn main() {
 
     // println!("Response: {:?}", response);
 
-    let data =  serde_json::json!({
+    let mut template = String::new();
+    template.push_str(&String::from(r#"{
       "blocks": [
         {
           "type": "section",
           "text": {
             "type": "mrkdwn",
-            "text": "Hello, this is a test broadcast from your friendly *Sentinel*.\n"
+            "text":  "Hello, this is a test broadcast from your friendly *Sentinel*."#));
+    template.push_str(&message);
+    template.push_str(&String::from(r#""
           }
         }
       ]
-    });
+    }
+    "#));
+
+    println!("{}", template);
+
+
+    // let data =  serde_json::json!({
+    //   "blocks": [
+    //     {
+    //       "type": "section",
+    //       "text": {
+    //         "type": "mrkdwn",
+    //         "text": "Hello, this is a test broadcast from your friendly *Sentinel*.\n"
+    //       }
+    //     }
+    //   ]
+    // });
+    let data: serde_json::Value = serde_json::from_str(&template).unwrap();
     let (_, body_json): (hyper::Response<hyper::Body>, serde_json::Value) = 
       match slack::notify(&data).await {
       Ok(result) => result,
