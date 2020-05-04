@@ -19,7 +19,8 @@ mod errors;
 mod configure;
 mod utils;
 mod slack;
-mod database;
+mod dbslave;
+mod monitor;
 
 static CONFIG: Lazy<config::Config> = Lazy::new(|| {
   let mut glob_path = "conf/development/*";
@@ -56,72 +57,5 @@ async fn main() {
       println!("Conf: {}", _conf);
     }
    
-
-    let result1 = database::fetch::<database::ConnectorMysql, Result<Vec<database::Data>, Error>>(database::ConnectorMysql{}).await.unwrap();
-    // println!("MySQL Result: {:#?}", result1);
-
-    let mut message = String::new();
-    let data = &result1[0];
-    message.push_str(&String::from(format!("\\n\\nMaster host: {}\\n", &data.master_host[..])));
-    message.push_str(&String::from(format!("Master user: {}\\n", &data.master_user[..])));
-    message.push_str(&String::from(format!("Slave IO running: {}\\n", &data.slave_io_running[..])));
-    message.push_str(&String::from(format!("Slave SQL running: {}\\n", &data.slave_sql_running[..])));
-    message.push_str(&String::from(format!("Master log file: {}\\n", &data.master_log_file[..])));
-    message.push_str(&String::from(format!("Master log pos: {}\\n", data.read_master_log_pos)));
-    message.push_str(&String::from(format!("Relay log file: {}\\n", &data.relay_log_file[..])));
-    message.push_str(&String::from(format!("Relay log pos: {}\\n", data.relay_log_pos)));
-    message.push_str(&String::from(format!("Relay master log file: {}\\n", &data.relay_master_log_file[..])));
-    message.push_str(&String::from(format!("Slave seconds behind master: {}\\n\\n", data.seconds_behind_master)));
-
-    println!("{}", message);
-
-    // let result2 = database::fetch::<database::ConnectorPostgres, Result<String, Error>>(database::ConnectorPostgres{}).await;
-    // print!("Postgres Result: {:#?}", result2.unwrap());  
-
-    // let mut url = "https://jsonplaceholder.typicode.com/todos/1";
-    // let response: serde_json::Value = match utils::get(url).await {
-    //   Ok(result) => result,
-    //   Err(error) => panic!("Error whilst fetching url: {}, error: {:?}", url, error)
-    // };
-
-    // println!("Response: {:?}", response);
-
-    let mut template = String::new();
-    template.push_str(&String::from(r#"{
-      "blocks": [
-        {
-          "type": "section",
-          "text": {
-            "type": "mrkdwn",
-            "text":  "Hello, this is a test broadcast from your friendly *Sentinel*."#));
-    template.push_str(&message);
-    template.push_str(&String::from(r#""
-          }
-        }
-      ]
-    }
-    "#));
-
-    println!("{}", template);
-
-
-    // let data =  serde_json::json!({
-    //   "blocks": [
-    //     {
-    //       "type": "section",
-    //       "text": {
-    //         "type": "mrkdwn",
-    //         "text": "Hello, this is a test broadcast from your friendly *Sentinel*.\n"
-    //       }
-    //     }
-    //   ]
-    // });
-    let data: serde_json::Value = serde_json::from_str(&template).unwrap();
-    let (_, body_json): (hyper::Response<hyper::Body>, serde_json::Value) = 
-      match slack::notify(&data).await {
-      Ok(result) => result,
-      Err(error) => panic!("Error: {:#?}", error)
-    };
-
-    println!("Slack response: {:#?}", body_json);
+    monitor::begin_watch().await;
 }

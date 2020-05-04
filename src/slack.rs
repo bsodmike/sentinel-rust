@@ -1,7 +1,7 @@
 use hyper::{Response, Body};
-use crate::configure;
-use crate::utils;
-use crate::errors;
+use super::configure;
+use super::utils;
+use super::errors;
 
 pub async fn notify(data: &serde_json::Value) -> Result<(Response<Body>, serde_json::Value), Box<dyn std::error::Error + Send + Sync>> {
   let slack_url: String = configure::fetch::<String>(String::from("slack_url")).unwrap();

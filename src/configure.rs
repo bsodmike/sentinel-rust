@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::errors::Error;
+use super::errors::Error;
 
 pub struct ConfigInfo<V> {
   flag: V
