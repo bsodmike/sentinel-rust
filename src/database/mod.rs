@@ -29,16 +29,16 @@ pub trait Fetch<ReturnType> {
 
 #[derive(Debug)]
 pub struct Data {
-  master_host: String,
-  master_user: String,
-  slave_io_running: String,
-  slave_sql_running: String,
-  master_log_file: String,
-  read_master_log_pos: u64,
-  relay_log_file: String,
-  relay_log_pos: u64,
-  relay_master_log_file: String,
-  seconds_behind_master: u64,
+  pub master_host: String,
+  pub master_user: String,
+  pub slave_io_running: String,
+  pub slave_sql_running: String,
+  pub master_log_file: String,
+  pub read_master_log_pos: u64,
+  pub relay_log_file: String,
+  pub relay_log_pos: u64,
+  pub relay_master_log_file: String,
+  pub seconds_behind_master: u64,
 }
 
 #[async_trait]
@@ -46,9 +46,8 @@ impl Fetch<Result<Vec<Data>, Error>> for ConnectorMysql
 {
   async fn call_db<'a>(&'a self) -> Result<Vec<Data>, Error> {
     let mysql_url: String = configure::fetch::<String>(String::from("mysql_url")).unwrap();
-    let url: &str = &mysql_url[..];
     let pool = sqlx::MySqlPool::builder()
-      .build(&url).await?;
+      .build(&mysql_url[..]).await?;
     // println!("Pool: {:#?}", pool);
 
     let sql = "SHOW SLAVE STATUS";
@@ -77,7 +76,7 @@ impl Fetch<Result<Vec<Data>, Error>> for ConnectorMysql
 #[async_trait]
 impl Fetch<Result<String, Error>> for ConnectorPostgres
 {
-  async fn call_db<'a>(&'a self) -> anyhow::Result<String, Error> {
+  async fn call_db<'a>(&'a self) -> Result<String, Error> {
     panic!("Err: {:#?}", Error::NotImplementedError)
   }
 }
