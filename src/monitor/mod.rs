@@ -25,10 +25,33 @@ async fn check_dbslave() -> Result<String, Error> {
   Ok(message)
 }
 
+async fn dbslave_notification_template(message: &String) -> Result<String, Error>{
+    let mut template = String::new();
+    template.push_str(&String::from(r#"
+    {
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text":  "Hello, this is a test broadcast from your friendly *Sentinel*."#));
+    template.push_str(&message);
+    template.push_str(&String::from(r#""
+          }
+        }
+      ]
+    }"#));
+
+    println!("{}", template);
+
+    Ok(template)
+}
+
 pub async fn begin_watch() {
   // "Night gathers, and now my watch begins. It shall not end until my death. I shall take no wife, hold no lands, father no children. I shall wear no crowns and win no glory. I shall live and die at my post. I am the sword in the darkness. I am the watcher on the walls. I am the shield that guards the realms of men. I pledge my life and honor to the Night's Watch, for this night and all the nights to come."
   // ―The Night's Watch oath
 
   let message = check_dbslave().await.unwrap();
-  notify::notify_slack(&message).await;
+  let template = dbslave_notification_template(&message).await.unwrap();
+  notify::notify_slack(&template).await;
 }
