@@ -1,6 +1,3 @@
-#[macro_use]
-use sqlx::mysql::MySqlPool;
-use crate::sqlx::prelude::MySqlQueryAs;
 use crate::sqlx::Cursor;
 use crate::sqlx::Row;
 use crate::errors::Error;
@@ -24,11 +21,11 @@ struct Connection {
 
 #[async_trait]
 pub trait Fetch<ReturnType> {
-  async fn call_db<'a>(&'a self) -> ReturnType;
+  async fn fetch_dbslave_status<'a>(&'a self) -> ReturnType;
 }
 
 #[derive(Debug)]
-pub struct Data {
+pub struct DBSlaveStatus {
   pub master_host: String,
   pub master_user: String,
   pub slave_io_running: String,
@@ -42,9 +39,9 @@ pub struct Data {
 }
 
 #[async_trait]
-impl Fetch<Result<Vec<Data>, Error>> for ConnectorMysql
+impl Fetch<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
 {
-  async fn call_db<'a>(&'a self) -> Result<Vec<Data>, Error> {
+  async fn fetch_dbslave_status<'a>(&'a self) -> Result<Vec<DBSlaveStatus>, Error> {
     let mysql_url: String = configure::fetch::<String>(String::from("mysql_url")).unwrap();
     let pool = sqlx::MySqlPool::builder()
       .build(&mysql_url[..]).await?;
@@ -54,7 +51,7 @@ impl Fetch<Result<Vec<Data>, Error>> for ConnectorMysql
     let mut cursor = sqlx::query(sql).fetch(&pool);
     let mut result = Vec::new();
     while let Some(row) = cursor.next().await? {
-        let data = Data {
+        let data = DBSlaveStatus {
           master_host: row.get("Master_Host"),
           master_user: row.get("Master_User"),
           slave_io_running: row.get("Slave_IO_Running"),
@@ -66,6 +63,7 @@ impl Fetch<Result<Vec<Data>, Error>> for ConnectorMysql
           relay_master_log_file: row.get("Relay_Master_Log_File"),
           seconds_behind_master: row.get("Seconds_Behind_Master"),
         };
+
         result.push(data);
     }
     
@@ -76,8 +74,8 @@ impl Fetch<Result<Vec<Data>, Error>> for ConnectorMysql
 #[async_trait]
 impl Fetch<Result<String, Error>> for ConnectorPostgres
 {
-  async fn call_db<'a>(&'a self) -> Result<String, Error> {
-    panic!("Err: {:#?}", Error::NotImplementedError)
+  async fn fetch_dbslave_status<'a>(&'a self) -> Result<String, Error> {
+    unimplemented!()
   }
 }
 
@@ -85,7 +83,7 @@ pub async fn fetch<ConnectorType: 'static, ReturnType>(connector: ConnectorType)
 where
   ConnectorType: Fetch<ReturnType>
 {
-  let result = connector.call_db().await;
+  let result = connector.fetch_dbslave_status().await;
 
   result
 }
