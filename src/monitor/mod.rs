@@ -1,4 +1,6 @@
 use super::errors::Error;
+use std::{thread, time};
+use std::sync::Arc;
 use chrono::{DateTime, Utc, NaiveDateTime};
 use crate::dbslave;
 use crate::dbslave::alertable;
@@ -100,11 +102,39 @@ pub async fn begin_watch() -> Result<(), Error>{
   queue.add(alert2).await?;
 
   println!("{:#?}", queue);
-
   // println!("Output: {}", data.slave_io_running);
 
+  let delay = time::Duration::from_millis(1);
+  let now = time::Instant::now();
+
+  let thread_delay = Arc::new(1);
+
+  let mut done = false;
+  while !done {
+    let thread_delay = Arc::clone(&thread_delay);
+
+    let handle = thread::spawn(move || {
+      for j in 1..20 {
+        println!("hi number {} from the spawned thread!", j);
+        thread::sleep(time::Duration::from_millis(*thread_delay));
+      }
+      println!("Thread end: {:#?}", now.elapsed());
+    });
+
+    for i in 1..10 {
+      println!("hi number {} from the main thread!", i);
+      thread::sleep(time::Duration::from_millis(1));
+    }
+    println!("Loop end: {:#?}", now.elapsed());
+
+    handle.join().unwrap();
+    done = true;
+  }
+
+  println!("Elapsed: {:#?}", now.elapsed());
+
   let template = dbslave_notification_template(&message).await.unwrap();
-  notify::notify_slack(&template).await;
+  // notify::notify_slack(&template).await;
 
   Ok(())
 }
