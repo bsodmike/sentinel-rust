@@ -60,7 +60,7 @@ impl Default for DBSlaveStatus {
 #[async_trait]
 impl Fetch<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
 {
-  async fn fetch_dbslave_status<'a>(&'a self) -> Result<Vec<DBSlaveStatus>, Error> {
+  async fn fetch_dbslave_status(&self) -> Result<Vec<DBSlaveStatus>, Error> {
     let mysql_url: String = configure::fetch::<String>(String::from("mysql_url")).unwrap();
     let pool = sqlx::MySqlPool::builder()
       .build(&mysql_url[..]).await?;
@@ -93,7 +93,7 @@ impl Fetch<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
 #[async_trait]
 impl Fetch<Result<String, Error>> for ConnectorPostgres
 {
-  async fn fetch_dbslave_status<'a>(&'a self) -> Result<String, Error> {
+  async fn fetch_dbslave_status(&self) -> Result<String, Error> {
     unimplemented!()
   }
 }
@@ -102,7 +102,5 @@ pub async fn fetch<ConnectorType: 'static, ReturnType>(connector: ConnectorType)
 where
   ConnectorType: Fetch<ReturnType>
 {
-  let result = connector.fetch_dbslave_status().await;
-
-  result
+  connector.fetch_dbslave_status().await
 }

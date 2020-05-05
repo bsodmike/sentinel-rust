@@ -12,9 +12,9 @@ struct WrappedDateTime(chrono::DateTime<chrono::Utc>);
 
 impl std::default::Default for WrappedDateTime {
   fn default() -> Self {
-    return WrappedDateTime(
+    WrappedDateTime(
       DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc)
-    );
+    )
   }
 }
 
@@ -34,23 +34,23 @@ async fn check_dbslave() -> Result<(dbslave::DBSlaveStatus, String), Error> {
 
   let mut message = String::new();
   let data = &result[0];
-  message.push_str(&String::from(format!("\\n\\n*Timestamp (Beijing)*: {}\\n\\n", beijing_timestamp)));
-  message.push_str(&String::from(format!("Master host: {}\\n", &data.master_host[..])));
-  message.push_str(&String::from(format!("Master user: {}\\n", &data.master_user[..])));
-  message.push_str(&String::from(format!("Slave IO running: {}\\n", &data.slave_io_running[..])));
-  message.push_str(&String::from(format!("Slave SQL running: {}\\n", &data.slave_sql_running[..])));
-  message.push_str(&String::from(format!("Master log file: {}\\n", &data.master_log_file[..])));
-  message.push_str(&String::from(format!("Master log pos: {}\\n", data.read_master_log_pos)));
-  message.push_str(&String::from(format!("Relay log file: {}\\n", &data.relay_log_file[..])));
-  message.push_str(&String::from(format!("Relay log pos: {}\\n", data.relay_log_pos)));
-  message.push_str(&String::from(format!("Relay master log file: {}\\n", &data.relay_master_log_file[..])));
-  message.push_str(&String::from(format!("Slave seconds behind master: {}\\n\\n", data.seconds_behind_master)));
+  message.push_str(&format!("\\n\\n*Timestamp (Beijing)*: {}\\n\\n", beijing_timestamp)[..]);
+  message.push_str(&(format!("Master host: {}\\n", &data.master_host[..]))[..]);
+  message.push_str(&(format!("Master user: {}\\n", &data.master_user[..]))[..]);
+  message.push_str(&(format!("Slave IO running: {}\\n", &data.slave_io_running[..]))[..]);
+  message.push_str(&(format!("Slave SQL running: {}\\n", &data.slave_sql_running[..]))[..]);
+  message.push_str(&(format!("Master log file: {}\\n", &data.master_log_file[..]))[..]);
+  message.push_str(&(format!("Master log pos: {}\\n", data.read_master_log_pos))[..]);
+  message.push_str(&(format!("Relay log file: {}\\n", &data.relay_log_file[..]))[..]);
+  message.push_str(&(format!("Relay log pos: {}\\n", data.relay_log_pos))[..]);
+  message.push_str(&(format!("Relay master log file: {}\\n", &data.relay_master_log_file[..]))[..]);
+  message.push_str(&(format!("Slave seconds behind master: {}\\n\\n", data.seconds_behind_master))[..]);
 
   let returned_data = data.clone();
   Ok((returned_data, message))
 }
 
-async fn dbslave_notification_template(message: &String) -> Result<String, Error>{
+async fn dbslave_notification_template(message: &str) -> Result<String, Error>{
     let mut template = String::new();
     template.push_str(&String::from(r#"
     {
@@ -90,7 +90,7 @@ pub async fn begin_watch() -> Result<(), Error>{
   );
   let alert = Alert {
     data: data.clone(),
-    created_at: created_at
+    created_at
   };
   let alert2 = Alert {
     data: data.clone(),
@@ -103,8 +103,8 @@ pub async fn begin_watch() -> Result<(), Error>{
 
   // println!("Output: {}", data.slave_io_running);
 
-  // let template = dbslave_notification_template(&message).await.unwrap();
-  // notify::notify_slack(&template).await;
+  let template = dbslave_notification_template(&message).await.unwrap();
+  notify::notify_slack(&template).await;
 
   Ok(())
 }
