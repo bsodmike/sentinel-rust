@@ -75,7 +75,7 @@ impl Fetch<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
 impl Fetch<Result<String, Error>> for ConnectorPostgres
 {
   async fn fetch_dbslave_status<'a>(&'a self) -> Result<String, Error> {
-    panic!("Err: {:#?}", Error::NotImplementedError)
+    unimplemented!()
   }
 }
 

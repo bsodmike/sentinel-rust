@@ -5,7 +5,7 @@ use crate::utils;
 mod notify;
 
 async fn check_dbslave() -> Result<String, Error> {
-  let beijing_timestamp = utils::get_beijing_timestamp();
+  let beijing_timestamp = utils::time::get_beijing_timestamp_as_rfc2822();
 
   let result = dbslave::fetch::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{})
     .await
