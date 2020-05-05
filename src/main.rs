@@ -14,5 +14,5 @@ async fn main() {
       println!("Conf: {}", _conf);
     }
    
-    sentinel::monitor::begin_watch().await;
+    sentinel::monitor::begin_watch().await.unwrap();
 }

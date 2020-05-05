@@ -4,6 +4,8 @@ use crate::errors::Error;
 use async_trait::async_trait;
 use crate::configure;
 
+pub mod alertable;
+
 #[derive(Debug)]
 pub struct ConnectorMysql {
 
@@ -24,7 +26,7 @@ pub trait Fetch<ReturnType> {
   async fn fetch_dbslave_status<'a>(&'a self) -> ReturnType;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DBSlaveStatus {
   pub master_host: String,
   pub master_user: String,
@@ -36,6 +38,23 @@ pub struct DBSlaveStatus {
   pub relay_log_pos: u64,
   pub relay_master_log_file: String,
   pub seconds_behind_master: u64,
+}
+
+impl Default for DBSlaveStatus {
+  fn default() -> Self {
+    Self {
+      master_host: String::new(),
+      master_user: String::new(),
+      slave_io_running: String::new(),
+      slave_sql_running: String::new(),
+      master_log_file: String::new(),
+      read_master_log_pos: 0,
+      relay_log_file: String::new(),
+      relay_log_pos: 0,
+      relay_master_log_file: String::new(),
+      seconds_behind_master: 0,
+    }
+  }
 }
 
 #[async_trait]

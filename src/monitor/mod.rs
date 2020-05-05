@@ -1,10 +1,12 @@
 use super::errors::Error;
 use crate::dbslave;
+use crate::dbslave::alertable;
 use crate::utils;
+use crate::alerts;
 
 mod notify;
 
-async fn check_dbslave() -> Result<String, Error> {
+async fn check_dbslave() -> Result<(dbslave::DBSlaveStatus, String), Error> {
   let beijing_timestamp = utils::time::get_beijing_timestamp_as_rfc2822();
 
   let result = dbslave::fetch::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{})
@@ -26,7 +28,8 @@ async fn check_dbslave() -> Result<String, Error> {
   message.push_str(&String::from(format!("Relay master log file: {}\\n", &data.relay_master_log_file[..])));
   message.push_str(&String::from(format!("Slave seconds behind master: {}\\n\\n", data.seconds_behind_master)));
 
-  Ok(message)
+  let returned_data = data.clone();
+  Ok((returned_data, message))
 }
 
 async fn dbslave_notification_template(message: &String) -> Result<String, Error>{
@@ -51,11 +54,24 @@ async fn dbslave_notification_template(message: &String) -> Result<String, Error
     Ok(template)
 }
 
-pub async fn begin_watch() {
+pub async fn begin_watch() -> Result<(), Error>{
   // "Night gathers, and now my watch begins. It shall not end until my death. I shall take no wife, hold no lands, father no children. I shall wear no crowns and win no glory. I shall live and die at my post. I am the sword in the darkness. I am the watcher on the walls. I am the shield that guards the realms of men. I pledge my life and honor to the Night's Watch, for this night and all the nights to come."
   // ―The Night's Watch oath
 
-  let message = check_dbslave().await.unwrap();
-  let template = dbslave_notification_template(&message).await.unwrap();
-  notify::notify_slack(&template).await;
+  let (data, message) = check_dbslave().await.unwrap();
+  let trigger_alert = alertable::run(data.clone()).await?;
+ 
+
+  let result = match alerts::queue::add::<dbslave::DBSlaveStatus>(data.clone()).await {
+    Ok(value) => value,
+    Err(e) => panic!(e)
+  };
+  
+
+  println!("Output: {}", data.slave_io_running);
+
+  // let template = dbslave_notification_template(&message).await.unwrap();
+  // notify::notify_slack(&template).await;
+
+  Ok(())
 }
