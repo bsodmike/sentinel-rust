@@ -1,8 +1,19 @@
 use std::fmt;
 use crate::errors::Error;
 use crate::dbslave;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, NaiveDateTime};
 use crate::utils::time;
+
+#[derive(Debug)]
+struct WrappedDateTime(chrono::DateTime<chrono::Utc>);
+
+impl std::default::Default for WrappedDateTime {
+  fn default() -> Self {
+    return WrappedDateTime(
+      DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc)
+    );
+  }
+}
 
 #[derive(Default)]
 struct AlertQueue<DataType> {
@@ -12,8 +23,9 @@ struct AlertQueue<DataType> {
 #[derive(Default, Debug)]
 pub struct Alert<DataType> {
   data: DataType,
-  // created_at: DateTime<Utc>,
+  created_at: WrappedDateTime,
 }
+
 
 impl<DataType> fmt::Debug for AlertQueue<DataType>
 where
@@ -38,12 +50,13 @@ pub async fn add<DataType>(data: DataType, current_queue: Vec<Alert<DataType>>) 
 where
   DataType: Default + fmt::Debug
 {
-
-
+  let created_at = WrappedDateTime(
+    time::get_utc_time()
+  );
 
   let alert = Alert {
     data: data,
-    // created_at: time::get_utc_time()
+    created_at: created_at
   };
   println!("{:#?}", alert);
 
