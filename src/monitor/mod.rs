@@ -60,13 +60,11 @@ pub async fn begin_watch() -> Result<(), Error>{
 
   let (data, message) = check_dbslave().await.unwrap();
   let trigger_alert = alertable::run(data.clone()).await?;
- 
-
-  let result = match alerts::queue::add::<dbslave::DBSlaveStatus>(data.clone()).await {
-    Ok(value) => value,
-    Err(e) => panic!(e)
-  };
   
+  let initial = vec![alerts::queue::Alert::<dbslave::DBSlaveStatus>::default()];
+  let result = alerts::queue::add::<dbslave::DBSlaveStatus>(data.clone(), initial).await?;
+
+  let result2 = alerts::queue::add::<dbslave::DBSlaveStatus>(data.clone(), result).await?;
 
   println!("Output: {}", data.slave_io_running);
 
