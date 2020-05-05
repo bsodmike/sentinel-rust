@@ -2,7 +2,7 @@ use std::env;
 use getopts::{Options};
 use crate::errors::Error;
 
-const PROGRAM: &'static str = "sentinel";
+const PROGRAM: &str = "sentinel";
 
 pub struct Config {
   pub slack_token: String,

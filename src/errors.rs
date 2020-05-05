@@ -1,4 +1,3 @@
-use hyper;
 use std::io;
 use serde_json::error;
 

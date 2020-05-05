@@ -3,9 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime, FixedOffset, Utc};
 
 pub fn get_utc_time() -> chrono::DateTime<chrono::Utc> {
-  let utc_time: DateTime<Utc> = Utc::now();
-
-  utc_time
+  Utc::now()
 }
 
 /// Returns a `chrono::DateTime<chrono::FixedOffset>`
@@ -23,9 +21,7 @@ pub fn parse_utc_time_to_rfc_rfc3339(utc: DateTime<Utc>) -> DateTime<FixedOffset
 }
 
 pub fn from_rfc_rfc3339(timestamp: &str) -> Result<DateTime<FixedOffset>, Error> {
-  let result = DateTime::parse_from_rfc3339(timestamp)?;
-
-  Ok(result)
+  Ok(DateTime::parse_from_rfc3339(timestamp)?)
 }
 
 pub fn is_greater(current: DateTime<FixedOffset>, previous: DateTime<FixedOffset>) -> bool {
@@ -41,22 +37,17 @@ pub fn is_greater(current: DateTime<FixedOffset>, previous: DateTime<FixedOffset
 }
 
 pub fn get_utc_timestamp_as_rfc2822() -> String {
-  let current_timestamp = get_utc_time().to_rfc2822();
-
-  current_timestamp
+  get_utc_time().to_rfc2822()
 }
 
 pub fn get_beijing_timestamp_as_rfc2822() -> String {
   let beijing_timezone = FixedOffset::east(8 * 3600);
-  let beijing_timestamp = get_utc_time().with_timezone(&beijing_timezone).to_rfc2822();
-
-  beijing_timestamp
+  
+  get_utc_time().with_timezone(&beijing_timezone).to_rfc2822()
 }
 
 pub fn timestamp_as_rfc2822_from_utc(utc: DateTime<Utc>) -> String {
-  let current_timestamp = utc.to_rfc2822();
-
-  current_timestamp
+  utc.to_rfc2822()
 }
 
 fn time_since_epoch_in_millis() -> u128 {
@@ -64,9 +55,7 @@ fn time_since_epoch_in_millis() -> u128 {
   let since_the_epoch = start.duration_since(UNIX_EPOCH)
       .expect("Time went backwards");
 
-  let since_the_epoch_in_ms = since_the_epoch.as_millis();
-
-  since_the_epoch_in_ms
+  since_the_epoch.as_millis()
 }
 
 #[cfg(test)]

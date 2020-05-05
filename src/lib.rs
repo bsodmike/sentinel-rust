@@ -17,6 +17,7 @@ pub mod utils;
 pub mod dbslave;
 pub mod slack;
 pub mod monitor;
+pub mod alerts;
 
 use config::*;
 use glob::glob;

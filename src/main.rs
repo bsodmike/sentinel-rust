@@ -1,8 +1,6 @@
 extern crate tokio;
 extern crate futures;
 
-use sentinel;
-
 #[tokio::main]
 async fn main() {
     let enable_cli_options: bool = sentinel::configure::fetch::<bool>(String::from("cli_options"))
@@ -14,5 +12,5 @@ async fn main() {
       println!("Conf: {}", _conf);
     }
    
-    sentinel::monitor::begin_watch().await;
+    sentinel::monitor::begin_watch().await.unwrap();
 }

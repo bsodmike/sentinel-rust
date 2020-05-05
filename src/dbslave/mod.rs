@@ -4,6 +4,8 @@ use crate::errors::Error;
 use async_trait::async_trait;
 use crate::configure;
 
+pub mod alertable;
+
 #[derive(Debug)]
 pub struct ConnectorMysql {
 
@@ -24,7 +26,7 @@ pub trait Fetch<ReturnType> {
   async fn fetch_dbslave_status<'a>(&'a self) -> ReturnType;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DBSlaveStatus {
   pub master_host: String,
   pub master_user: String,
@@ -38,10 +40,27 @@ pub struct DBSlaveStatus {
   pub seconds_behind_master: u64,
 }
 
+impl Default for DBSlaveStatus {
+  fn default() -> Self {
+    Self {
+      master_host: String::new(),
+      master_user: String::new(),
+      slave_io_running: String::new(),
+      slave_sql_running: String::new(),
+      master_log_file: String::new(),
+      read_master_log_pos: 0,
+      relay_log_file: String::new(),
+      relay_log_pos: 0,
+      relay_master_log_file: String::new(),
+      seconds_behind_master: 0,
+    }
+  }
+}
+
 #[async_trait]
 impl Fetch<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
 {
-  async fn fetch_dbslave_status<'a>(&'a self) -> Result<Vec<DBSlaveStatus>, Error> {
+  async fn fetch_dbslave_status(&self) -> Result<Vec<DBSlaveStatus>, Error> {
     let mysql_url: String = configure::fetch::<String>(String::from("mysql_url")).unwrap();
     let pool = sqlx::MySqlPool::builder()
       .build(&mysql_url[..]).await?;
@@ -74,7 +93,7 @@ impl Fetch<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
 #[async_trait]
 impl Fetch<Result<String, Error>> for ConnectorPostgres
 {
-  async fn fetch_dbslave_status<'a>(&'a self) -> Result<String, Error> {
+  async fn fetch_dbslave_status(&self) -> Result<String, Error> {
     unimplemented!()
   }
 }
@@ -83,7 +102,5 @@ pub async fn fetch<ConnectorType: 'static, ReturnType>(connector: ConnectorType)
 where
   ConnectorType: Fetch<ReturnType>
 {
-  let result = connector.fetch_dbslave_status().await;
-
-  result
+  connector.fetch_dbslave_status().await
 }
