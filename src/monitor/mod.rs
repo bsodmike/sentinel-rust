@@ -1,5 +1,5 @@
-use super::Error;
-use super::dbslave;
+use super::errors::Error;
+use crate::dbslave;
 use crate::utils;
 
 mod notify;

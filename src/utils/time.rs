@@ -13,7 +13,10 @@ pub fn get_utc_time() -> chrono::DateTime<chrono::Utc> {
 /// # Example
 ///
 /// ~~~~
-/// let previous = utils::parse_utc_time_to_rfc_rfc3339(utils::get_utc_time());
+/// use sentinel::utils::time::get_utc_time;
+/// use sentinel::utils::time::parse_utc_time_to_rfc_rfc3339;
+/// 
+/// parse_utc_time_to_rfc_rfc3339(get_utc_time());
 /// ~~~~
 pub fn parse_utc_time_to_rfc_rfc3339(utc: DateTime<Utc>) -> DateTime<FixedOffset> {
   from_rfc_rfc3339(&utc.to_rfc3339()[..]).unwrap()
