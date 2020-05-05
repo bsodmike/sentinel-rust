@@ -8,6 +8,7 @@ extern crate futures;
 extern crate once_cell;
 extern crate sqlx;
 extern crate async_trait;
+extern crate chrono;
 
 use config::*;
 use glob::glob;

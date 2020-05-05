@@ -1,9 +1,12 @@
 use super::Error;
 use super::dbslave;
+use crate::utils;
 
 mod notify;
 
 async fn check_dbslave() -> Result<String, Error> {
+  let beijing_timestamp = utils::get_beijing_timestamp();
+
   let result = dbslave::fetch::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{})
     .await
     .unwrap();
@@ -11,7 +14,8 @@ async fn check_dbslave() -> Result<String, Error> {
 
   let mut message = String::new();
   let data = &result[0];
-  message.push_str(&String::from(format!("\\n\\nMaster host: {}\\n", &data.master_host[..])));
+  message.push_str(&String::from(format!("\\n\\n*Timestamp (Beijing)*: {}\\n\\n", beijing_timestamp)));
+  message.push_str(&String::from(format!("Master host: {}\\n", &data.master_host[..])));
   message.push_str(&String::from(format!("Master user: {}\\n", &data.master_user[..])));
   message.push_str(&String::from(format!("Slave IO running: {}\\n", &data.slave_io_running[..])));
   message.push_str(&String::from(format!("Slave SQL running: {}\\n", &data.slave_sql_running[..])));

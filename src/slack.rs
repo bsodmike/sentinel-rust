@@ -1,13 +1,14 @@
-use hyper::{Response, Body};
-use super::configure;
-use super::utils;
 use super::errors;
+use super::configure;
+use hyper::{Response, Body};
+
+use crate::utils::json_request;
 
 pub async fn notify(data: &serde_json::Value) -> Result<(Response<Body>, serde_json::Value), Box<dyn std::error::Error + Send + Sync>> {
   let slack_url: String = configure::fetch::<String>(String::from("slack_url")).unwrap();
   let payload = Body::from(data.to_string());
 
-  let (response, body): (Response<Body>, hyper::body::Bytes) = match utils::post(&slack_url, payload).await {
+  let (response, body): (Response<Body>, hyper::body::Bytes) = match json_request::post(&slack_url, payload).await {
     Ok(result) => result,
     Err(error) => panic!("Error [slack]: {:#?}", error)
   };
