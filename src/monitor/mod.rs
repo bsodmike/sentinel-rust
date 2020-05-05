@@ -1,10 +1,28 @@
 use super::errors::Error;
+use chrono::{DateTime, Utc, NaiveDateTime};
 use crate::dbslave;
 use crate::dbslave::alertable;
 use crate::utils;
 use crate::alerts;
 
 mod notify;
+
+#[derive(Debug)]
+struct WrappedDateTime(chrono::DateTime<chrono::Utc>);
+
+impl std::default::Default for WrappedDateTime {
+  fn default() -> Self {
+    return WrappedDateTime(
+      DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc)
+    );
+  }
+}
+
+#[derive(Default, Debug)]
+pub struct Alert<DataType> {
+  data: DataType,
+  created_at: WrappedDateTime,
+}
 
 async fn check_dbslave() -> Result<(dbslave::DBSlaveStatus, String), Error> {
   let beijing_timestamp = utils::time::get_beijing_timestamp_as_rfc2822();
@@ -61,12 +79,29 @@ pub async fn begin_watch() -> Result<(), Error>{
   let (data, message) = check_dbslave().await.unwrap();
   let trigger_alert = alertable::run(data.clone()).await?;
   
-  let initial = vec![alerts::queue::Alert::<dbslave::DBSlaveStatus>::default()];
-  let result = alerts::queue::add::<dbslave::DBSlaveStatus>(data.clone(), initial).await?;
+  // let initial = vec![Alert::<dbslave::DBSlaveStatus>::default()];
+  let mut queue = alerts::queue::add::<dbslave::DBSlaveStatus>(data.clone()).await?;
 
-  let result2 = alerts::queue::add::<dbslave::DBSlaveStatus>(data.clone(), result).await?;
+  let created_at = WrappedDateTime(
+    utils::time::get_utc_time()
+  );
+  let created_at2 = WrappedDateTime(
+    utils::time::get_utc_time()
+  );
+  let alert = Alert {
+    data: data.clone(),
+    created_at: created_at
+  };
+  let alert2 = Alert {
+    data: data.clone(),
+    created_at: created_at2
+  };
+  queue.add(alert).await?;
+  queue.add(alert2).await?;
 
-  println!("Output: {}", data.slave_io_running);
+  println!("{:#?}", queue);
+
+  // println!("Output: {}", data.slave_io_running);
 
   // let template = dbslave_notification_template(&message).await.unwrap();
   // notify::notify_slack(&template).await;
