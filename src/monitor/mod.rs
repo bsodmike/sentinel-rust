@@ -3,7 +3,8 @@ use std::{thread, time};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
-use chrono::{DateTime, Utc, NaiveDateTime};
+use std::collections::VecDeque;
+use chrono::{DateTime, Utc, NaiveDateTime, Duration};
 use crate::dbslave;
 use crate::dbslave::alertable;
 use crate::utils;
@@ -17,13 +18,48 @@ mod notify;
 #[derive(Debug)]
 struct WrappedDateTime(chrono::DateTime<chrono::Utc>);
 
-impl std::default::Default for WrappedDateTime {
-  fn default() -> Self {
-    WrappedDateTime(
-      DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc)
-    )
+impl WrappedDateTime {
+  pub fn new(dt: chrono::DateTime<chrono::Utc>) -> WrappedDateTime {
+    WrappedDateTime(dt)
   }
 }
+
+impl std::default::Default for WrappedDateTime {
+  fn default() -> WrappedDateTime {
+    let utc = Utc::now().with_timezone(&Utc);
+    WrappedDateTime::new(utc)
+  }
+}
+
+impl WrappedDateTime {
+  pub fn to_rfc2822(&self) -> String {
+    self.0.to_rfc2822()
+  }
+}
+
+impl WrappedDateTime {
+  pub fn to_rfc3339(&self) -> String {
+    self.0.to_rfc3339()
+  }
+}
+
+impl WrappedDateTime {
+  pub fn add_minutes(&self, mins: i64) -> WrappedDateTime {
+    let naive_dt = self.0.naive_utc() + Duration::minutes(mins);
+    let dt = utils::time::to_rfc_rfc3339(naive_dt).unwrap();
+    
+    println!(">>>>>>> created_at dt 🚀{:#?}", dt.to_rfc2822());
+    println!(">>>>>>> NOW {:#?}", Utc::now().to_rfc2822());
+
+    WrappedDateTime::new(dt.with_timezone(&Utc))
+  }
+}
+
+// impl std::convert::Into<String> for WrappedDateTime {
+//   fn into(self) -> String {
+//     self
+//   }
+// }
 
 #[derive(Default, Debug)]
 pub struct Alert<DataType> {
@@ -32,11 +68,15 @@ pub struct Alert<DataType> {
   created_at: WrappedDateTime,
 }
 
-/// Used for passing messages in channels
-#[derive(Debug)]
-enum WsMessage {
-    Close,
-    Text(String),
+/// FIXME needs usage
+// #[derive(Default, Debug)]
+// pub enum Alerts {
+//   DBSlave(Alert<dbslave::DBSlaveStatus>),
+// }
+
+#[derive(Default, Debug)]
+pub struct SentAlerts {
+  pub sent_queue: VecDeque<Alert<dbslave::DBSlaveStatus>>
 }
 
 // Handler
@@ -157,7 +197,7 @@ async fn dbslave_notification_template(message: &str) -> Result<String, Error>{
       ]
     }"#));
 
-    println!("{}", template);
+    // println!("{}", template);
 
     Ok(template)
 }
@@ -166,93 +206,135 @@ pub async fn begin_watch() -> Result<(), Error>{
   // "Night gathers, and now my watch begins. It shall not end until my death. I shall take no wife, hold no lands, father no children. I shall wear no crowns and win no glory. I shall live and die at my post. I am the sword in the darkness. I am the watcher on the walls. I am the shield that guards the realms of men. I pledge my life and honor to the Night's Watch, for this night and all the nights to come."
   // ―The Night's Watch oath
 
-  // Enabling mock data PREVENTS making actual calls to a live dbslave server.
-  let enable_mock_data = true;
+  // Initialise main queue
+  let mut queue = alerts::queue::add::<dbslave::DBSlaveStatus>().await.unwrap();
+  let mut sent_queue = SentAlerts::initialise().await.unwrap();
+  println!("Queue initialised: {:#?}", queue);
+  println!("Sent queue initialised: {:#?}", sent_queue);
 
-  let query_data: Vec<dbslave::DBSlaveStatus>;
-  
-  if enable_mock_data {
-    query_data = dbslave::fetch_mocked::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
-  } else {
-    query_data = dbslave::fetch::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
-  }
+  // Primary run-loop
+  loop {
 
-  let (data, message) = check_dbslave(query_data).await.unwrap();
-  // let trigger_alert = alertable::run(data.clone()).await?;
-  
-  // let initial = vec![Alert::<dbslave::DBSlaveStatus>::default()];
-  let mut queue = alerts::queue::add::<dbslave::DBSlaveStatus>(data.clone()).await.unwrap();
+    // Enabling mock data PREVENTS making actual calls to a live dbslave server.
+    let enable_mock_data = true;
 
-  let created_at = WrappedDateTime(
-    utils::time::get_utc_time()
-  );
-  let created_at2 = WrappedDateTime(
-    utils::time::get_utc_time()
-  );
-  let alert = Alert {
-    data: data.clone(),
-    template: dbslave_notification_template(&message).await.unwrap(),
-    created_at
-  };
-  let alert2 = Alert {
-    data: data.clone(),
-    template: dbslave_notification_template(&message).await.unwrap(),
-    created_at: created_at2
-  };
-  queue.add(alert).await?;
-  queue.add(alert2).await?;
+    let query_data: Vec<dbslave::DBSlaveStatus>;
+    
+    if enable_mock_data {
+      query_data = dbslave::fetch_mocked::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
+    } else {
+      query_data = dbslave::fetch::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
+    }
 
+    let (data, db_status) = check_dbslave(query_data).await.unwrap();
+    let (alertable, slave_data) = alertable::run(data.clone()).await?;
 
-  // Threads.
-  let delay = time::Duration::from_millis(1);
-  let now = time::Instant::now();
+    // let timestamp = utils::time::parse_utc_time_to_rfc_rfc3339(Utc::now());
+    // let  = Utc::now() + Duration::minutes(30);
 
-  let mut handler = Handler;
-  let r_client = RtmClient::get_client(&mut handler).unwrap();
+    let dummy_created_at = WrappedDateTime::default().add_minutes(-40);
+    println!("Dummy created at {:#?}!", dummy_created_at.to_rfc2822());
 
-  let mut loop_done = false;
-  while !loop_done {
-    println!("🚀🚀🚀 Inside queue reduction loop. Elapsed {:#?}", now.elapsed());
-    let queue_len = queue.len().unwrap();
-    if queue_len > 0 {
-      let current_alert = queue.queue.remove(0);
+    // TEMP
+    let test_alert = Alert {
+      data: slave_data.clone(),
+      template: dbslave_notification_template(&db_status).await.unwrap(),
+      created_at: dummy_created_at
+    };    
+    sent_queue.add(test_alert);
+    println!("🎃🎃🎃🎃🎃🎃 Sent Queue: Added sent alert to queue.");
+    // TEMP
 
-      let sender = r_client.sender().clone();
-      // Thread
-      let handle = thread::spawn(move || {
-        println!("spawn thread: ...");
+    if sent_queue.sent_queue.len() > 0 {
+      let last_alert = sent_queue.sent_queue.back();
+
+      if let Some(_alert) = last_alert {
+        let current_time =  utils::time::parse_utc_time_to_rfc_rfc3339(Utc::now());
+        let alert_timestamp = utils::time::from_rfc_rfc3339(&_alert.created_at.to_rfc3339()).unwrap();
+        let friendly_alert_timestamp = alert_timestamp.to_rfc2822();
+
+        println!("Current time occured before threshold {}!", utils::time::occurred_more_than_mins_ago(alert_timestamp, current_time, 30));
+        println!("Current time {}!", current_time.to_rfc2822());
+        println!("Alert time {}!", friendly_alert_timestamp);
+      }
+
+      if alertable {
+        let mut alert = Alert {
+          data: slave_data.clone(),
+          template: dbslave_notification_template(&db_status).await.unwrap(),
+          created_at: WrappedDateTime(utils::time::get_utc_time()),
+        };    
+
+        queue.add(alert).await?;
+        println!("🚀🚀🚀 Added alert to queue.");
+        println!("Queue: {:#?}", queue);
+
+        alert = Alert {
+          data: slave_data,
+          template: dbslave_notification_template(&db_status).await.unwrap(),
+          created_at: WrappedDateTime(utils::time::get_utc_time()),
+        };    
+        sent_queue.add(alert);
+        println!("Sent Queue: Added sent alert to queue.");
+        println!("Sent queue {:#?}", sent_queue.sent().await.unwrap());
+        println!("Sent queue length {:#?}", sent_queue.sent_queue.len());
+      }
+    }
+
+    // Threads handling
+    let mut handler = Handler;
+    let r_client = RtmClient::get_client(&mut handler).unwrap();
+    let now = time::Instant::now();
+
+    let mut loop_done = false;
+    while !loop_done {
+      let mut queue_len = queue.len().unwrap();
+      println!("🚀🚀🚀 Inside queue reduction loop. Queue length: {:#?} / Elapsed {:#?}", queue_len, now.elapsed());
+
+      if queue_len > 0 {
+        let current_alert = queue.queue.remove(0);
+
+        let sender = r_client.sender().clone();
+        // Thread
+        let handle = thread::spawn(move || {
+          println!("spawn thread: ...");
+          
+          thread::sleep(time::Duration::from_millis(60000));
+          sender.send_message(current_alert);
+          println!("🚀🚀🚀 Added alert to channel-queue. Elapsed {:#?}", now.elapsed());
+        });
+
+        // Disabled to prevent blocking the Main thread.
+        // handle.join().unwrap();
+      } else if queue_len <= 0 {
+        loop_done = true;
+      }
+    }
+
+    println!("🚀🚀🚀 Queue is now empty! et voilà! Elapsed {:#?}\n\n{:#?}", now.elapsed(), queue);
+
+    // Main thread
+    for i in 1..20 {
+      println!("Main thread: {}!", i);
+      thread::sleep(time::Duration::from_millis(1));
+    }
+    println!("Main thread loop end: {:#?}", now.elapsed());
+
+    // Notification processing loop
+    let mut done = false;
+    while !done {
+      for alert in r_client.rx.try_iter() {
+        println!("Received queue item {:#?}, elapsed {:#?}", alert, now.elapsed());
         
-        sender.send_message(current_alert);
-        println!("🚀🚀🚀 Added alert to channel-queue. Elapsed {:#?}", now.elapsed());
-      });
-      handle.join().unwrap();
-    } else if queue_len <= 0 {
-      loop_done = true;
+        // Send alert here.
+        // notify::notify_slack(&alert.template).await;
+      }
+
+      done = true;
     }
+
+    println!("🚀 Pausing main loop. Elapsed: {:#?}", now.elapsed());
+    thread::sleep(time::Duration::from_millis(10000));
+    println!("Continuing now. Elapsed {:#?}", now.elapsed());
   }
-
-  println!("🚀🚀🚀 Queue is now empty! et voila! Elapsed {:#?}\n\n{:#?}", now.elapsed(), queue);
-
-  // Main thread
-  for i in 1..10 {
-    println!("Main thread: {}!", i);
-    thread::sleep(time::Duration::from_millis(1));
-  }
-  println!("Main thread loop end: {:#?}", now.elapsed());
-
-  // Notification processing loop
-  let done = false;
-  while !done {
-    for alert in r_client.rx.try_iter() {
-      println!("Received queue item {:#?}, elapsed {:#?}", alert, now.elapsed());
-      
-      // Send alert here.
-      // notify::notify_slack(&alert.template).await;
-    }
-  }
-
-
-  println!("Elapsed: {:#?}", now.elapsed());
-
-  Ok(())
 }

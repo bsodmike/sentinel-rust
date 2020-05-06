@@ -1032,6 +1032,7 @@ dependencies = [
  "indicatif",
  "log",
  "once_cell",
+ "regex",
  "rustc-serialize",
  "serde_json",
  "sqlx",

@@ -2,6 +2,7 @@ use std::fmt;
 use std::collections::VecDeque;
 use crate::errors::Error;
 use crate::monitor;
+use crate::dbslave;
 
 // #[derive(Debug)]
 // struct WrappedDateTime(chrono::DateTime<chrono::Utc>);
@@ -49,11 +50,34 @@ impl<DataType> AlertQueue<DataType> {
   }
 }
 
-pub async fn add<DataType>(data: DataType) -> Result<AlertQueue::<DataType>, Error>
+pub async fn add<DataType>() -> Result<AlertQueue::<DataType>, Error>
 where
   DataType: Default + fmt::Debug
 {
   let main_queue: AlertQueue<DataType> = AlertQueue::default();
 
   Ok(main_queue)
+}
+
+impl monitor::SentAlerts {
+  pub async fn initialise() -> Result<monitor::SentAlerts, Error> {
+    let mut vec = VecDeque::new();
+    vec.push_back(monitor::Alert::default());
+
+    let sent_queue = monitor::SentAlerts {
+      sent_queue: vec
+    };
+    
+    Ok(sent_queue)
+  }
+
+  pub async fn add(&mut self, alert: monitor::Alert<dbslave::DBSlaveStatus>) -> Result<(), Error> {
+    self.sent_queue.push_back(alert);
+
+    Ok(())
+  }
+
+  pub async fn sent(&mut self) -> Result<&VecDeque<monitor::Alert<dbslave::DBSlaveStatus>>, Error> {
+    Ok(&self.sent_queue)
+  }
 }

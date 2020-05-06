@@ -110,7 +110,10 @@ pub trait FetchMock<ReturnType> {
 impl FetchMock<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
 {
   async fn fetch_mock_status(&self) -> Result<Vec<DBSlaveStatus>, Error> {
-    Ok(vec![DBSlaveStatus::default()])
+    let mut status = DBSlaveStatus::default();
+    status.seconds_behind_master = 400;
+
+    Ok(vec![status])
   }
 }
 
