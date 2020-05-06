@@ -7,24 +7,13 @@ use crate::configure;
 pub mod alertable;
 
 #[derive(Debug)]
-pub struct ConnectorMysql {
-
-}
+pub struct ConnectorMysql;
 
 #[derive(Debug)]
-pub struct ConnectorPostgres {
-  
-}
+pub struct ConnectorPostgres;
 
 #[derive(Debug)]
-struct Connection {
-
-}
-
-#[async_trait]
-pub trait Fetch<ReturnType> {
-  async fn fetch_dbslave_status<'a>(&'a self) -> ReturnType;
-}
+struct Connection;
 
 #[derive(Debug, Clone)]
 pub struct DBSlaveStatus {
@@ -55,6 +44,11 @@ impl Default for DBSlaveStatus {
       seconds_behind_master: 0,
     }
   }
+}
+
+#[async_trait]
+pub trait Fetch<ReturnType> {
+  async fn fetch_dbslave_status<'a>(&'a self) -> ReturnType;
 }
 
 #[async_trait]
@@ -103,4 +97,34 @@ where
   ConnectorType: Fetch<ReturnType>
 {
   connector.fetch_dbslave_status().await
+}
+
+// MOCKED
+// TODO: Make this an integration test.
+#[async_trait]
+pub trait FetchMock<ReturnType> {
+  async fn fetch_mock_status<'a>(&'a self) -> ReturnType;
+}
+
+#[async_trait]
+impl FetchMock<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
+{
+  async fn fetch_mock_status(&self) -> Result<Vec<DBSlaveStatus>, Error> {
+    Ok(vec![DBSlaveStatus::default()])
+  }
+}
+
+#[async_trait]
+impl FetchMock<Result<String, Error>> for ConnectorPostgres
+{
+  async fn fetch_mock_status(&self) -> Result<String, Error> {
+    unimplemented!()
+  }
+}
+
+pub async fn fetch_mocked<ConnectorType: 'static, ReturnType>(connector: ConnectorType) -> ReturnType
+where
+  ConnectorType: FetchMock<ReturnType>
+{
+  connector.fetch_mock_status().await
 }

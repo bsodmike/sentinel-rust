@@ -1,5 +1,7 @@
 use super::errors::Error;
 use std::{thread, time};
+use std::sync::atomic::{AtomicUsize};
+use std::sync::mpsc;
 use std::sync::Arc;
 use chrono::{DateTime, Utc, NaiveDateTime};
 use crate::dbslave;
@@ -26,12 +28,37 @@ pub struct Alert<DataType> {
   created_at: WrappedDateTime,
 }
 
-async fn check_dbslave() -> Result<(dbslave::DBSlaveStatus, String), Error> {
+/// Used for passing messages in channels
+#[derive(Debug)]
+enum WsMessage {
+    Close,
+    Text(String),
+}
+
+/// The actual messaging client.
+pub struct RtmClient {
+  sender: Sender,
+  rx: mpsc::Receiver<WsMessage>,
+}
+
+/// Thread-safe API for sending messages asynchronously
+#[derive(Clone)]
+pub struct Sender {
+  tx: mpsc::Sender<WsMessage>,
+  msg_num: Arc<AtomicUsize>,
+}
+
+
+
+
+
+
+
+
+async fn check_dbslave(query_data: Vec<dbslave::DBSlaveStatus>) -> Result<(dbslave::DBSlaveStatus, String), Error> {
   let beijing_timestamp = utils::time::get_beijing_timestamp_as_rfc2822();
 
-  let result = dbslave::fetch::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{})
-    .await
-    .unwrap();
+  let result = query_data;
   // println!("dbslave Result: {:#?}", result);
 
   let mut message = String::new();
@@ -78,8 +105,19 @@ pub async fn begin_watch() -> Result<(), Error>{
   // "Night gathers, and now my watch begins. It shall not end until my death. I shall take no wife, hold no lands, father no children. I shall wear no crowns and win no glory. I shall live and die at my post. I am the sword in the darkness. I am the watcher on the walls. I am the shield that guards the realms of men. I pledge my life and honor to the Night's Watch, for this night and all the nights to come."
   // ―The Night's Watch oath
 
-  let (data, message) = check_dbslave().await.unwrap();
-  let trigger_alert = alertable::run(data.clone()).await?;
+  // Enabling mock data PREVENTS making actual calls to a live dbslave server.
+  let enable_mock_data = true;
+
+  let query_data: Vec<dbslave::DBSlaveStatus>;
+  
+  if enable_mock_data {
+    query_data = dbslave::fetch_mocked::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
+  } else {
+    query_data = dbslave::fetch::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
+  }
+
+  let (data, message) = check_dbslave(query_data).await.unwrap();
+  // let trigger_alert = alertable::run(data.clone()).await?;
   
   // let initial = vec![Alert::<dbslave::DBSlaveStatus>::default()];
   let mut queue = alerts::queue::add::<dbslave::DBSlaveStatus>(data.clone()).await?;
@@ -104,34 +142,26 @@ pub async fn begin_watch() -> Result<(), Error>{
   println!("{:#?}", queue);
   // println!("Output: {}", data.slave_io_running);
 
+  // CONCEPT ------------------
+
   let delay = time::Duration::from_millis(1);
   let now = time::Instant::now();
 
-  let thread_delay = Arc::new(1);
+  struct Handler;
+  trait EventHandler {
+    fn foo(&self) -> &str;
+  }
+  impl EventHandler for Handler {
+    fn foo(&self) -> &'static str {
+      let message = "hello";
+      println!("Handler: {}", message);
 
-  let mut done = false;
-  while !done {
-    let thread_delay = Arc::clone(&thread_delay);
-
-    let handle = thread::spawn(move || {
-      for j in 1..20 {
-        println!("hi number {} from the spawned thread!", j);
-        thread::sleep(time::Duration::from_millis(*thread_delay));
-      }
-      println!("Thread end: {:#?}", now.elapsed());
-    });
-
-    for i in 1..10 {
-      println!("hi number {} from the main thread!", i);
-      thread::sleep(time::Duration::from_millis(1));
+      message
     }
-    println!("Loop end: {:#?}", now.elapsed());
-
-    handle.join().unwrap();
-    done = true;
   }
 
-  println!("Elapsed: {:#?}", now.elapsed());
+  let myHandler = Handler;
+  myHandler.foo();
 
   let template = dbslave_notification_template(&message).await.unwrap();
   // notify::notify_slack(&template).await;
