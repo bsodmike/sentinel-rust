@@ -9,6 +9,8 @@ extern crate once_cell;
 extern crate sqlx;
 extern crate async_trait;
 extern crate chrono;
+#[macro_use]
+extern crate log;
 
 pub mod configure;
 pub mod opts;

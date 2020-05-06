@@ -1030,6 +1030,7 @@ dependencies = [
  "hyper",
  "hyper-tls",
  "indicatif",
+ "log",
  "once_cell",
  "rustc-serialize",
  "serde_json",

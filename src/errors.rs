@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io;
 use serde_json::error;
 
@@ -9,7 +10,8 @@ pub enum Error {
   HyperHTTP(hyper::http::Error),
   Serde(error::Error),
   Sqlx(sqlx::Error),
-  Io(io::Error),
+  /// Errors that do not fit under the other types
+  Internal(String),
   UnexpectedJson,
   NoResult,
   NoMembers,
@@ -39,12 +41,6 @@ impl From<error::Error> for Error {
   }
 }
 
-impl From<io::Error> for Error {
-  fn from(err: io::Error) -> Error {
-      Error::Io(err)
-  }
-}
-
 impl From<sqlx::Error> for Error {
   fn from(err: sqlx::Error) -> Error {
       Error::Sqlx(err)
@@ -54,6 +50,12 @@ impl From<sqlx::Error> for Error {
 impl From<chrono::ParseError> for Error {
   fn from(err: chrono::ParseError) -> Error {
     Error::Chrono(err)
+  }
+}
+
+impl From<io::Error> for Error {
+  fn from(err: io::Error) -> Error {
+      Error::Internal(format!("{:?}", err))
   }
 }
 
@@ -68,3 +70,11 @@ impl std::fmt::Display for Error {
       write!(f, "Unknown error!")
   }
 }
+
+// impl fmt::Display for Error {
+//   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//       match *self {
+//         Error::Internal(ref st) => write!(f, "Internal Error: {:?}", st),
+//       }
+//   }
+// }

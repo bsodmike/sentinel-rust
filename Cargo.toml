@@ -24,3 +24,4 @@ once_cell = "^1.3.1"
 async-trait = "^0.1.30"
 sqlx = { version = "^0.3", default-features = false, features = [ "runtime-tokio", "macros", "mysql" ] }
 chrono = "^0.4.11"
+log = "^0.4.8"
