@@ -234,6 +234,7 @@ pub async fn begin_watch() -> Result<(), Error>{
 
   // TODO: Extract these.
   // Configuration Options
+  // Antispam throttling threshold in minutes.
   let antispam_threshold: i64 = 2;
   // Enabling mock data PREVENTS making actual calls to a live dbslave server.
   let enable_mock_data = true;
