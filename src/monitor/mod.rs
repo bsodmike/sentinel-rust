@@ -16,7 +16,7 @@ use crate::log;
 mod notify;
 
 #[derive(Debug)]
-struct WrappedDateTime(chrono::DateTime<chrono::Utc>);
+pub struct WrappedDateTime(chrono::DateTime<chrono::Utc>);
 
 impl WrappedDateTime {
   pub fn new(dt: chrono::DateTime<chrono::Utc>) -> WrappedDateTime {
@@ -57,12 +57,6 @@ impl WrappedDateTime {
     WrappedDateTime::new(with_tz)
   }
 }
-
-// impl std::convert::Into<String> for WrappedDateTime {
-//   fn into(self) -> String {
-//     self
-//   }
-// }
 
 #[derive(Default, Debug)]
 pub struct Alert<DataType> {
@@ -211,12 +205,26 @@ pub async fn begin_watch() -> Result<(), Error>{
 
   // Initialise main queue
   let mut queue = alerts::queue::add::<dbslave::DBSlaveStatus>().await.unwrap();
-  let mut sent_queue = SentAlerts::initialise().await.unwrap();
   println!("Queue initialised: {:#?}", queue);
-  println!("Sent queue initialised: {:#?}", sent_queue);
+
+  // Inititalise sent queue
+  let mut sent_queue = SentAlerts::initialise().await.unwrap();
+  println!("Sent Queue initialised {:#?}", sent_queue);
+
+  // let dummy_created_at = WrappedDateTime::default().add_minutes(-29);
+  // let mut dummy_alert: Alert<dbslave::DBSlaveStatus> = Alert::default();
+  // dummy_alert.created_at = dummy_created_at.to_rfc3339();    
+
+  // sent_queue.add(dummy_alert).await?;
+  // println!("Sent Queue with dummy added {:#?}", sent_queue);
+
+  let mut loop_counter: i64 = 0;
 
   // Primary run-loop
   loop {
+    println!("MAIN Loop Start 🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀 {}", loop_counter);
+    println!("Sent Queue: {:#?}", sent_queue);
+
 
     // Enabling mock data PREVENTS making actual calls to a live dbslave server.
     let enable_mock_data = true;
@@ -230,13 +238,12 @@ pub async fn begin_watch() -> Result<(), Error>{
     }
 
     let (data, db_status) = check_dbslave(query_data).await.unwrap();
-    let (alertable, slave_data) = alertable::run(data.clone()).await?;
-    let mut process_alert = false;
+    let (notify_now, slave_data) = alertable::run(data.clone()).await?;
+    
 
-    // let timestamp = utils::time::parse_utc_time_to_rfc_rfc3339(Utc::now());
-    // let  = Utc::now() + Duration::minutes(30);
 
-    let dummy_created_at = WrappedDateTime::default().add_minutes(-29);
+
+    let dummy_created_at = WrappedDateTime::default().add_minutes(-31);
     let dummy_created_at_rfc3339 = dummy_created_at.to_rfc3339();
     println!("Dummy created at {:#?}", dummy_created_at.to_rfc2822());
     println!("Dummy created at as RFC3339 {:#?}", dummy_created_at_rfc3339);
@@ -247,59 +254,99 @@ pub async fn begin_watch() -> Result<(), Error>{
       template: dbslave_notification_template(&db_status).await.unwrap(),
       created_at: dummy_created_at_rfc3339
     };
+    // TEMP
     
     println!("-----FIELD {:#?}", test_alert.created_at);
     let parsed = utils::time::from_rfc_rfc3339(&test_alert.created_at).unwrap();
     println!("-----parsed {:#?}", parsed.to_rfc2822());
 
-    sent_queue.add(test_alert).await.unwrap();
-    println!("🎃🎃🎃🎃🎃🎃 Sent Queue: Added sent alert to queue.");
-    // TEMP
 
-    let sent_queue_lenth = sent_queue.sent_queue.len();
-    println!("🎃🎃🎃 Sent Queue LENGTH {}", sent_queue_lenth);
+    let sent_queue_length = sent_queue.sent_queue.len();
+    println!("🎃🎃🎃🎃🎃🎃🎃🎃🎃 Sent Queue LENGTH {}", sent_queue_length);
+    println!("🎃🎃🎃🎃🎃🎃🎃🎃🎃 Notify now: {:#?}", notify_now);
 
-    if true {
-      match sent_queue.sent_queue.pop_back() {
-        Some(queue_item) => {
-          let parsed = utils::time::from_rfc_rfc3339(&queue_item.created_at);
-          let parsed_ref = parsed.unwrap();
-          let current_time =  utils::time::parse_utc_time_to_rfc_rfc3339(Utc::now());
-          let alert_timestamp = parsed_ref;
+    if notify_now {
+      if sent_queue_length <= 0 {
+        println!("🐤🐤🐤🐤🐤🐤🐤🐤🐤 Sent queue is empty, this is the first loop!");
 
-          println!("Current time {:#?}", current_time.to_rfc2822());
-          println!("Alert parsed timestamp {:#?}", parsed_ref.to_rfc2822());
+        // Sent queue is empty, good to notify now.
+        let mut alert = Alert {
+          data: slave_data.clone(),
+          template: dbslave_notification_template(&db_status).await.unwrap(),
+          created_at: WrappedDateTime::default().to_rfc3339(),
+        };  
+  
+        queue.add(alert).await?;
+        println!("Now: 🚀🚀🚀 Added alert to queue.");
 
-          let process_alerts_if_false = utils::time::occurred_more_than_mins_ago(alert_timestamp, current_time, 30);
-          println!("Alert occured before threshold? {}", process_alerts_if_false);
+        let mut sent_alert = Alert {
+          data: slave_data.clone(),
+          template: dbslave_notification_template(&db_status).await.unwrap(),
+          created_at: WrappedDateTime::default().to_rfc3339(),
+        };    
+        sent_queue.add(sent_alert).await?;
+        println!("Now: Sent Queue: Added sent alert to queue.");
+        // println!("Sent queue {:#?}", sent_queue.sent().await.unwrap());
+        println!("Now: 📦📦📦 Sent queue length {:#?}", sent_queue.sent_queue.len());
+      } else {
+        // Need to check last sent item to prevent spamming notifications
+        println!("🎃🎃🎃🎃🎃🎃🎃🎃🎃 Sent Queue LENGTH {}", sent_queue_length);
 
-          if !process_alerts_if_false {
-            let mut alert = Alert {
-              data: slave_data.clone(),
-              template: dbslave_notification_template(&db_status).await.unwrap(),
-              created_at: WrappedDateTime::default().to_rfc3339(),
-            };    
-    
-            queue.add(alert).await?;
-            println!("🚀🚀🚀 Added alert to queue.");
-            println!("Queue: {:#?}", queue);
-    
-            alert = Alert {
-              data: slave_data,
-              template: dbslave_notification_template(&db_status).await.unwrap(),
-              created_at: WrappedDateTime::default().to_rfc3339(),
-            };    
-            sent_queue.add(alert);
-            println!("Sent Queue: Added sent alert to queue.");
-            println!("Sent queue {:#?}", sent_queue.sent().await.unwrap());
-            println!("Sent queue length {:#?}", sent_queue.sent_queue.len());
+        // NOTE: Notice a call is made to `VecDeque::pop_back()` and any calls to
+        // `push_back()` will have a circular effect, i.e. the accumulator will
+        // not grow, but certainly the most recently pushed will be stored.
+        match sent_queue.sent_queue.pop_back() {
+          Some(queue_item) => {
+            println!("🐷🐷🐷🐷🐷🐷🐷 Sent Queue Inside SOME {:#?}", queue_item);
+            println!("🐷🐷🐷🐷🐷🐷🐷 Some: Loop count {}", loop_counter);
+
+            let parsed = utils::time::from_rfc_rfc3339(&queue_item.created_at);
+            let parsed_ref = parsed.unwrap();
+            let current_time =  utils::time::parse_utc_time_to_rfc_rfc3339(Utc::now());
+            let alert_timestamp = parsed_ref;
+  
+            println!("Current time {:#?}", current_time.to_rfc2822());
+            println!("Alert parsed timestamp {:#?}", parsed_ref.to_rfc2822());
+  
+            let threshold: i64 = 30;
+            let process_alerts = utils::time::occurred_more_than_mins_ago(alert_timestamp, current_time, 30);
+            println!("Alert occured before threshold({} mins)? {}", threshold, process_alerts);
+  
+            println!("🐷🐷🐷🐷🐷🐷🐷 Some: Process??? {}", process_alerts);
+
+           
+            // if process_alerts {
+            if true {
+              let mut alert = Alert {
+                data: slave_data.clone(),
+                template: dbslave_notification_template(&db_status).await.unwrap(),
+                created_at: WrappedDateTime::default().to_rfc3339(),
+              };    
+      
+              queue.add(alert).await.unwrap();
+              println!("🚀🚀🚀 Some: Added alert to queue.");
+              println!("Queue: {:#?}", queue);
+      
+              let mut sent_alert = Alert {
+                data: slave_data.clone(),
+                template: dbslave_notification_template(&db_status).await.unwrap(),
+                created_at: WrappedDateTime::default().to_rfc3339(),
+              };    
+
+              // sent_queue.add(sent_alert).await.unwrap();
+              println!("Some: Sent Queue: Added sent alert to queue.");
+              println!("Sent queue {:#?}", sent_queue.sent().await.unwrap());
+              println!("Some: 📦📦📦 Sent queue length {:#?}", sent_queue.sent_queue.len());
+            }
+          },
+          None => {
+            panic!("In none...")
           }
-        },
-        None => {}
+        }
+
       }
-
-
     }
+ 
     // 🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀
 
     // Threads handling
@@ -320,8 +367,10 @@ pub async fn begin_watch() -> Result<(), Error>{
         let handle = thread::spawn(move || {
           println!("spawn thread: ...");
           
-          thread::sleep(time::Duration::from_millis(60000));
-          sender.send_message(current_alert);
+          match sender.send_message(current_alert) {
+            Ok(value) => value,
+            Err(error) => panic!("Err: {:#?}", error)
+          };
           println!("🚀🚀🚀 Added alert to channel-queue. Elapsed {:#?}", now.elapsed());
         });
 
@@ -336,7 +385,7 @@ pub async fn begin_watch() -> Result<(), Error>{
 
     // Main thread
     for i in 1..20 {
-      println!("Main thread: {}!", i);
+      // println!("Main thread: {}!", i);
       thread::sleep(time::Duration::from_millis(1));
     }
     println!("Main thread loop end: {:#?}", now.elapsed());
@@ -355,7 +404,9 @@ pub async fn begin_watch() -> Result<(), Error>{
     }
 
     println!("🚀 Pausing main loop. Elapsed: {:#?}", now.elapsed());
-    thread::sleep(time::Duration::from_millis(10000));
+    thread::sleep(time::Duration::from_millis(5000));
     println!("Continuing now. Elapsed {:#?}", now.elapsed());
+    println!("MAIN Loop Bottom 😸😸😸😸😸😸😸😸😸😸😸😸 {}", loop_counter);
+    loop_counter = loop_counter + 1;
   }
 }

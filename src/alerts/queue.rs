@@ -66,7 +66,7 @@ impl monitor::SentAlerts {
     let sent_queue = monitor::SentAlerts {
       sent_queue: vec
     };
-    
+
     Ok(sent_queue)
   }
 
