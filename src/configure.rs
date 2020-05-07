@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use crate::errors::Error;
-use crate::configure;
+use super::errors::Error;
 
 pub struct ConfigInfo<V> {
   flag: V
@@ -12,7 +11,7 @@ pub trait FetchFromConfig<T>: private::Sealed {
 
 impl<V> FetchFromConfig<bool> for ConfigInfo<V>
 where
-  V: std::fmt::Debug + std::fmt::Display + std::cmp::Eq + std::hash::Hash
+  V: std::fmt::Debug + std::fmt::Display
 {
   fn fetch_config(&self, config: &HashMap<String, String>) -> bool {
     let value = match config.get(&self.flag.to_string()) {
@@ -20,33 +19,25 @@ where
       None => String::new()
     };
 
-    let mut result: bool = false;
-
-    if value.eq("true") || value.eq("false") {
-      result = match value.parse::<bool>() {
+    if value.eq("true") || value.eq("false") { match value.parse::<bool>() {
         Ok(value) => value,
-        Err(error) => panic!(
-          "Unknown error parsing configuration flag {}. Err: {:#?}", 
-          &self.flag, error
-        )
-      };
+        Err(error) => panic!("Unknown error parsing configuration flag {}. Err: {:#?}", &self.flag, error)
+      }
+    } else {
+      false
     }
-
-  result
   }
 }
 
-impl<V> FetchFromConfig<String> for configure::ConfigInfo<V>
+impl<V> FetchFromConfig<String> for ConfigInfo<V>
 where
-  V: std::fmt::Debug + std::fmt::Display + std::cmp::Eq + std::hash::Hash
+  V: std::fmt::Debug + std::fmt::Display
 {
   fn fetch_config(&self, config: &HashMap<String, String>) -> String {
-    let value = match config.get(&self.flag.to_string()) {
+    match config.get(&self.flag.to_string()) {
       Some(value) => value.to_string(),
       None => String::new()
-    };
-
-    value
+    }
   }
 }
 
@@ -56,8 +47,10 @@ mod private {
   impl<V> Sealed for super::ConfigInfo<V> {}
 }
 
-pub fn fetch<T>(flag: std::string::String) -> Result<T, Error> 
+pub fn fetch<T>(flag: String) -> Result<T, Error> 
 where
+  // Trait bound to implement FetchFromConfig<T> for ConfigInfo<String>,
+  // to allow it to call `fetch_config` as defined by the trait, returning T.
   ConfigInfo<String>: FetchFromConfig<T>
 {
   let config = match crate::CONFIG.clone().try_into::<HashMap<String, String>>() {
@@ -65,10 +58,7 @@ where
     Err(error) => panic!("Error: {:?}", error)
   };
 
-  let cli_info = ConfigInfo {
-    flag: String::from(flag)
-  };
-
+  let cli_info = ConfigInfo { flag };
   Ok(cli_info.fetch_config(&config))
 }
 

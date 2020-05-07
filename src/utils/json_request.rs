@@ -17,7 +17,7 @@ pub async fn get(url: &'static str) -> Result<serde_json::Value, Error> {
     Ok(json_value)
 }
 
-pub async fn post(url: &String, payload: Body) -> Result<(Response<Body>, hyper::body::Bytes), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn post(url: &str, payload: Body) -> Result<(Response<Body>, hyper::body::Bytes), Box<dyn std::error::Error + Send + Sync>> {
   let req = Request::builder()
     .method(Method::POST)
     .uri(url)
