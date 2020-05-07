@@ -362,8 +362,6 @@ pub async fn begin_watch() -> Result<(), Error>{
 
               let parsed = utils::time::from_rfc_rfc3339(&queue_item.created_at);
               let parsed_ref = parsed.unwrap();
-              // let wrapper = WrappedDateTime::default();
-              // let dt = wrapper.add_minutes(-50);
 
               let alert = Alert {
                 data: slave_data,
