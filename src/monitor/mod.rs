@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::collections::VecDeque;
-use chrono::{DateTime, Utc, NaiveDateTime, Duration};
+use ::chrono::{Utc};
 use crate::dbslave;
 use crate::dbslave::alertable;
 use crate::utils;
@@ -13,64 +13,9 @@ use crate::log::LevelFilter;
 use crate::log4rs::append::file::FileAppender;
 use crate::log4rs::encode::pattern::PatternEncoder;
 use crate::log4rs::config::{Appender, Config, Root};
+use crate::wrappers;
 
 mod notify;
-
-#[derive(Debug)]
-pub struct WrappedDateTime(chrono::DateTime<chrono::Utc>);
-
-impl WrappedDateTime {
-  pub fn new(dt: chrono::DateTime<chrono::Utc>) -> WrappedDateTime {
-    WrappedDateTime(dt)
-  }
-}
-
-impl std::default::Default for WrappedDateTime {
-  fn default() -> WrappedDateTime {
-    let utc = Utc::now().with_timezone(&Utc);
-    WrappedDateTime::new(utc)
-  }
-}
-
-impl WrappedDateTime {
-  pub fn to_rfc2822(&self) -> String {
-    self.0.to_rfc2822()
-  }
-}
-
-impl WrappedDateTime {
-  pub fn to_rfc3339(&self) -> String {
-    self.0.to_rfc3339()
-  }
-}
-
-impl WrappedDateTime {
-  pub fn naive_utc(&self) -> NaiveDateTime {
-    self.0.naive_utc()
-  }
-}
-
-impl WrappedDateTime {
-  pub fn add_minutes(&self, mins: i64) -> WrappedDateTime {
-    let naive_dt = self.0.naive_utc() + Duration::minutes(mins);
-    let dt = utils::time::to_rfc_rfc3339(naive_dt).unwrap();
-    let with_tz = dt.with_timezone(&Utc);
-
-    WrappedDateTime::new(with_tz)
-  }
-}
-
-#[test]
-fn test_add_minutes() {
-  let mins: i64 = 30;
-  let naive_dt = Utc::now().naive_utc();
-  let naive_wrapped = WrappedDateTime::default()
-    .add_minutes(mins).
-    naive_utc();
-
-  let duration = naive_wrapped.signed_duration_since(naive_dt);
-  assert_eq!(duration.num_minutes(), mins);
-}
 
 
 #[derive(Default, Debug)]
@@ -275,21 +220,21 @@ pub async fn begin_watch() -> Result<(), Error>{
         let mut alert = Alert {
           data: slave_data.clone(),
           template: dbslave_notification_template(&db_status).await.unwrap(),
-          created_at: WrappedDateTime::default().to_rfc3339(),
+          created_at: wrappers::chrono::WrappedDateTime::default().to_rfc3339(),
         };  
   
         queue.add(alert).await?;
         info!("BR1: Main Queue: 🚀🚀🚀 Added alert to queue.");
 
         // // TEST HARNESS
-        // let wrapper = WrappedDateTime::default();
+        // let wrapper = wrappers::chrono::WrappedDateTime::default();
         // let dt = wrapper.add_minutes(-31);
         // // TEST HARNESS END
 
         alert = Alert {
           data: slave_data,
           template: dbslave_notification_template(&db_status).await.unwrap(),
-          created_at: WrappedDateTime::default().to_rfc3339(),
+          created_at: wrappers::chrono::WrappedDateTime::default().to_rfc3339(),
         };    
         sent_queue.add(alert).await?;
         info!("BR1: Sent Queue: 📦📦📦 Added sent alert to queue.");
@@ -328,7 +273,7 @@ pub async fn begin_watch() -> Result<(), Error>{
               let mut alert = Alert {
                 data: slave_data.clone(),
                 template: dbslave_notification_template(&db_status).await.unwrap(),
-                created_at: WrappedDateTime::default().to_rfc3339(),
+                created_at: wrappers::chrono::WrappedDateTime::default().to_rfc3339(),
               };    
       
               queue.add(alert).await.unwrap();
@@ -337,7 +282,7 @@ pub async fn begin_watch() -> Result<(), Error>{
               alert = Alert {
                 data: slave_data,
                 template: dbslave_notification_template(&db_status).await.unwrap(),
-                created_at: WrappedDateTime::default().to_rfc3339(),
+                created_at: wrappers::chrono::WrappedDateTime::default().to_rfc3339(),
               };    
 
               // NOTE: Further enforce that we are performing a `push_back()`

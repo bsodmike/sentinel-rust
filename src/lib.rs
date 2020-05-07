@@ -22,6 +22,7 @@ pub mod dbslave;
 pub mod slack;
 pub mod monitor;
 pub mod alerts;
+pub mod wrappers;
 
 use config::*;
 use glob::glob;
