@@ -47,11 +47,14 @@ impl WrappedDateTime {
   pub fn add_minutes(&self, mins: i64) -> WrappedDateTime {
     let naive_dt = self.0.naive_utc() + Duration::minutes(mins);
     let dt = utils::time::to_rfc_rfc3339(naive_dt).unwrap();
+    let with_tz = dt.with_timezone(&Utc);
     
-    println!(">>>>>>> created_at dt 🚀{:#?}", dt.to_rfc2822());
+    println!(">>>>>>> 🚀 dt.with_timezone(&Utc) {:#?}", with_tz.to_rfc2822());
+    println!(">>>>>>>>>> add {} mins", -(mins));
     println!(">>>>>>> NOW {:#?}", Utc::now().to_rfc2822());
 
-    WrappedDateTime::new(dt.with_timezone(&Utc))
+
+    WrappedDateTime::new(with_tz)
   }
 }
 
@@ -65,7 +68,7 @@ impl WrappedDateTime {
 pub struct Alert<DataType> {
   data: DataType,
   template: String,
-  created_at: WrappedDateTime,
+  pub created_at: String,
 }
 
 /// FIXME needs usage
@@ -228,58 +231,76 @@ pub async fn begin_watch() -> Result<(), Error>{
 
     let (data, db_status) = check_dbslave(query_data).await.unwrap();
     let (alertable, slave_data) = alertable::run(data.clone()).await?;
+    let mut process_alert = false;
 
     // let timestamp = utils::time::parse_utc_time_to_rfc_rfc3339(Utc::now());
     // let  = Utc::now() + Duration::minutes(30);
 
-    let dummy_created_at = WrappedDateTime::default().add_minutes(-40);
-    println!("Dummy created at {:#?}!", dummy_created_at.to_rfc2822());
+    let dummy_created_at = WrappedDateTime::default().add_minutes(-29);
+    let dummy_created_at_rfc3339 = dummy_created_at.to_rfc3339();
+    println!("Dummy created at {:#?}", dummy_created_at.to_rfc2822());
+    println!("Dummy created at as RFC3339 {:#?}", dummy_created_at_rfc3339);
 
     // TEMP
-    let test_alert = Alert {
+    let mut test_alert = Alert {
       data: slave_data.clone(),
       template: dbslave_notification_template(&db_status).await.unwrap(),
-      created_at: dummy_created_at
-    };    
-    sent_queue.add(test_alert);
+      created_at: dummy_created_at_rfc3339
+    };
+    
+    println!("-----FIELD {:#?}", test_alert.created_at);
+    let parsed = utils::time::from_rfc_rfc3339(&test_alert.created_at).unwrap();
+    println!("-----parsed {:#?}", parsed.to_rfc2822());
+
+    sent_queue.add(test_alert).await.unwrap();
     println!("🎃🎃🎃🎃🎃🎃 Sent Queue: Added sent alert to queue.");
     // TEMP
 
-    if sent_queue.sent_queue.len() > 0 {
-      let last_alert = sent_queue.sent_queue.back();
+    let sent_queue_lenth = sent_queue.sent_queue.len();
+    println!("🎃🎃🎃 Sent Queue LENGTH {}", sent_queue_lenth);
 
-      if let Some(_alert) = last_alert {
-        let current_time =  utils::time::parse_utc_time_to_rfc_rfc3339(Utc::now());
-        let alert_timestamp = utils::time::from_rfc_rfc3339(&_alert.created_at.to_rfc3339()).unwrap();
-        let friendly_alert_timestamp = alert_timestamp.to_rfc2822();
+    if true {
+      match sent_queue.sent_queue.pop_back() {
+        Some(queue_item) => {
+          let parsed = utils::time::from_rfc_rfc3339(&queue_item.created_at);
+          let parsed_ref = parsed.unwrap();
+          let current_time =  utils::time::parse_utc_time_to_rfc_rfc3339(Utc::now());
+          let alert_timestamp = parsed_ref;
 
-        println!("Current time occured before threshold {}!", utils::time::occurred_more_than_mins_ago(alert_timestamp, current_time, 30));
-        println!("Current time {}!", current_time.to_rfc2822());
-        println!("Alert time {}!", friendly_alert_timestamp);
+          println!("Current time {:#?}", current_time.to_rfc2822());
+          println!("Alert parsed timestamp {:#?}", parsed_ref.to_rfc2822());
+
+          let process_alerts_if_false = utils::time::occurred_more_than_mins_ago(alert_timestamp, current_time, 30);
+          println!("Alert occured before threshold? {}", process_alerts_if_false);
+
+          if !process_alerts_if_false {
+            let mut alert = Alert {
+              data: slave_data.clone(),
+              template: dbslave_notification_template(&db_status).await.unwrap(),
+              created_at: WrappedDateTime::default().to_rfc3339(),
+            };    
+    
+            queue.add(alert).await?;
+            println!("🚀🚀🚀 Added alert to queue.");
+            println!("Queue: {:#?}", queue);
+    
+            alert = Alert {
+              data: slave_data,
+              template: dbslave_notification_template(&db_status).await.unwrap(),
+              created_at: WrappedDateTime::default().to_rfc3339(),
+            };    
+            sent_queue.add(alert);
+            println!("Sent Queue: Added sent alert to queue.");
+            println!("Sent queue {:#?}", sent_queue.sent().await.unwrap());
+            println!("Sent queue length {:#?}", sent_queue.sent_queue.len());
+          }
+        },
+        None => {}
       }
 
-      if alertable {
-        let mut alert = Alert {
-          data: slave_data.clone(),
-          template: dbslave_notification_template(&db_status).await.unwrap(),
-          created_at: WrappedDateTime(utils::time::get_utc_time()),
-        };    
 
-        queue.add(alert).await?;
-        println!("🚀🚀🚀 Added alert to queue.");
-        println!("Queue: {:#?}", queue);
-
-        alert = Alert {
-          data: slave_data,
-          template: dbslave_notification_template(&db_status).await.unwrap(),
-          created_at: WrappedDateTime(utils::time::get_utc_time()),
-        };    
-        sent_queue.add(alert);
-        println!("Sent Queue: Added sent alert to queue.");
-        println!("Sent queue {:#?}", sent_queue.sent().await.unwrap());
-        println!("Sent queue length {:#?}", sent_queue.sent_queue.len());
-      }
     }
+    // 🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀
 
     // Threads handling
     let mut handler = Handler;

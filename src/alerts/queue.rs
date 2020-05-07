@@ -61,8 +61,7 @@ where
 
 impl monitor::SentAlerts {
   pub async fn initialise() -> Result<monitor::SentAlerts, Error> {
-    let mut vec = VecDeque::new();
-    vec.push_back(monitor::Alert::default());
+    let vec: VecDeque<monitor::Alert<dbslave::DBSlaveStatus>> = VecDeque::new();
 
     let sent_queue = monitor::SentAlerts {
       sent_queue: vec
