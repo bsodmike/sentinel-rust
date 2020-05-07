@@ -2,7 +2,7 @@ use crate::errors::Error;
 use crate::dbslave;
 
 
-pub async fn run(slave_data: dbslave::DBSlaveStatus) -> Result<(bool, dbslave::DBSlaveStatus), Error> {
+pub async fn run(slave_data: &dbslave::DBSlaveStatus) -> Result<bool, Error> {
   let mut alertable: bool = false;
 
   if slave_data.slave_io_running == "No" ||
@@ -11,5 +11,5 @@ pub async fn run(slave_data: dbslave::DBSlaveStatus) -> Result<(bool, dbslave::D
     alertable = true;
   }
 
-  Ok((alertable, slave_data))
+  Ok(alertable)
 }

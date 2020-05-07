@@ -259,8 +259,10 @@ pub async fn begin_watch() -> Result<(), Error>{
     }
 
     let (data, db_status) = check_dbslave(query_data).await.unwrap();
-    let (notify_now, slave_data) = alertable::run(data.clone()).await?;
+    let notify_now = alertable::run(&data).await?;
   
+    let slave_data = data;
+
     if notify_now {
       if sent_queue.sent_queue.len() <= 0 {
         info!("🐤🐤🐤🐤🐤🐤🐤🐤🐤 Sent queue is empty.");
@@ -328,10 +330,18 @@ pub async fn begin_watch() -> Result<(), Error>{
                 created_at: WrappedDateTime::default().to_rfc3339(),
               };    
 
-              info!("Some: Sent Queue: 📦📦📦 Sent queue length {:#?}", sent_queue.sent_queue.len());
+              // NOTE: Further enforce that we are performing a `push_back()`
+              // on to the VecDeque, on which we previously performed a
+              // `pop_back()`.
+              let prev_len = sent_queue.sent_queue.len();
+              info!("Some: Sent Queue: 📦📦📦 Sent queue length {:#?}", prev_len);
+
               sent_queue.add(alert).await.unwrap();
               info!("Some: Sent Queue: 📦📦📦 Added alert to SENT queue.");
-              info!("Some: Sent Queue: 📦📦📦 Sent queue length {:#?}", sent_queue.sent_queue.len());
+
+              let sent_len = sent_queue.sent_queue.len();
+              info!("Some: Sent Queue: 📦📦📦 Sent queue length {:#?}", sent_len);
+              assert_ne!(prev_len, sent_len);
             }
           },
           None => {
