@@ -9,6 +9,10 @@ extern crate once_cell;
 extern crate sqlx;
 extern crate async_trait;
 extern crate chrono;
+#[macro_use]
+extern crate log;
+extern crate log4rs;
+extern crate regex;
 
 pub mod configure;
 pub mod opts;
@@ -27,8 +31,7 @@ pub static CONFIG: Lazy<config::Config> = Lazy::new(|| {
   let mut glob_path = "conf/development/*";
   let mut settings = Config::default();
 
-  let key = "RUST_ENV";
-  let run_mode = match std::env::var(key) {
+  let run_mode = match std::env::var("RUST_ENV") {
     Ok(value) => value,
     Err(_) => String::new()
   };
