@@ -232,6 +232,12 @@ pub async fn begin_watch() -> Result<(), Error>{
   log4rs::init_config(config)?;
   // Logging END
 
+  // TODO: Extract these.
+  // Configuration Options
+  let antispam_threshold: i64 = 2;
+  // Enabling mock data PREVENTS making actual calls to a live dbslave server.
+  let enable_mock_data = true;
+
   // Initialise main queue
   let mut queue = alerts::queue::add::<dbslave::DBSlaveStatus>().await.unwrap();
   info!("Queue initialised: {:#?}", queue);
@@ -247,9 +253,6 @@ pub async fn begin_watch() -> Result<(), Error>{
     let now = time::Instant::now();
     info!("MAIN Loop Start 🐶🐶🐶🐶🐶🐶 {}", loop_counter);
 
-    // Enabling mock data PREVENTS making actual calls to a live dbslave server.
-    let enable_mock_data = true;
-
     let query_data: Vec<dbslave::DBSlaveStatus>;
     
     if enable_mock_data {
@@ -260,9 +263,9 @@ pub async fn begin_watch() -> Result<(), Error>{
 
     let (data, db_status) = check_dbslave(query_data).await.unwrap();
     let notify_now = alertable::run(&data).await?;
-  
     let slave_data = data;
-
+    
+    info!(" =>>>> Notify Now {}", notify_now);    
     if notify_now {
       if sent_queue.sent_queue.len() <= 0 {
         info!("🐤🐤🐤🐤🐤🐤🐤🐤🐤 Sent queue is empty.");
@@ -276,6 +279,11 @@ pub async fn begin_watch() -> Result<(), Error>{
   
         queue.add(alert).await?;
         info!("BR1: Main Queue: 🚀🚀🚀 Added alert to queue.");
+
+        // // TEST HARNESS
+        // let wrapper = WrappedDateTime::default();
+        // let dt = wrapper.add_minutes(-31);
+        // // TEST HARNESS END
 
         alert = Alert {
           data: slave_data,
@@ -302,19 +310,20 @@ pub async fn begin_watch() -> Result<(), Error>{
             let parsed_ref = parsed.unwrap();
             let current_time =  utils::time::parse_utc_time_to_rfc_rfc3339(Utc::now());
             let alert_timestamp = parsed_ref;
-  
+            let delta = current_time.naive_utc() - parsed_ref.naive_utc();
+            
             info!("Current time {:#?}", current_time.to_rfc2822());
             info!("Alert parsed timestamp {:#?}", parsed_ref.to_rfc2822());
   
-            let threshold: i64 = 30;
-            let process_alerts = utils::time::occurred_more_than_mins_ago(alert_timestamp, current_time, 30);
-            info!("Alert occured before threshold({} mins)? {}", threshold, process_alerts);
+            let process_alerts = utils::time::occurred_more_than_mins_ago(alert_timestamp, current_time, antispam_threshold);
+            info!("Delta: {} s", delta.num_seconds());
+            info!("Alert occured before threshold({} mins)? {}", antispam_threshold, process_alerts);
   
             info!("🐷🐷🐷🐷🐷🐷🐷 Some: Process??? {}", process_alerts);
 
            
-            // if process_alerts {
-            if true {
+            if process_alerts {
+            // if true {
               let mut alert = Alert {
                 data: slave_data.clone(),
                 template: dbslave_notification_template(&db_status).await.unwrap(),
@@ -342,6 +351,26 @@ pub async fn begin_watch() -> Result<(), Error>{
               let sent_len = sent_queue.sent_queue.len();
               info!("Some: Sent Queue: 📦📦📦 Sent queue length {:#?}", sent_len);
               assert_ne!(prev_len, sent_len);
+            } else {
+              // Need to prevent the sent queue reaching 0, other wise logic will
+              // flip over to branch BR1 there-by circumventing the
+              // `process_alerts` spam guard.
+
+              // Intentionally coerce `created_at` timestamp to allow entering
+              // this branch of logic.
+
+              let parsed = utils::time::from_rfc_rfc3339(&queue_item.created_at);
+              let parsed_ref = parsed.unwrap();
+              // let wrapper = WrappedDateTime::default();
+              // let dt = wrapper.add_minutes(-50);
+
+              let alert = Alert {
+                data: slave_data,
+                template: dbslave_notification_template(&db_status).await.unwrap(),
+                created_at: parsed_ref.to_rfc3339(),
+              };
+              sent_queue.add(alert).await.unwrap();
+              info!("📦📦📦 Add coerced alert to Sent Queue to keep logic in BR2, with timestamp {:#?}", parsed_ref.to_rfc2822());
             }
           },
           None => {
@@ -401,13 +430,26 @@ pub async fn begin_watch() -> Result<(), Error>{
         info!("Received queue item {:#?}, elapsed {:#?}", alert, now.elapsed());
         
         // Send alert here.
-        // notify::notify_slack(&alert.template).await;
+        notify::notify_slack(&alert.template).await;
+        info!("Notification sent to slack {}", &alert.template);
       }
 
       done = true;
     }
 
-    let pause_main: u64 = 5000;
+    let mut pause_main: u64 = 5000;
+
+    // PRODUCTION
+    let run_mode = match std::env::var("RUST_ENV") {
+      Ok(value) => value,
+      Err(_) => String::new()
+    };
+  
+    if run_mode.eq("production") {
+      pause_main = 300000; // 5 minutes.
+    }
+    // PRODUCTION
+
     info!("🚀 Pausing main loop. Elapsed: {:#?}", now.elapsed());
     thread::sleep(time::Duration::from_millis(pause_main));
     info!("🚀 Continuing main loop. Elapsed: {:#?}", now.elapsed());

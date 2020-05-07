@@ -31,8 +31,7 @@ pub static CONFIG: Lazy<config::Config> = Lazy::new(|| {
   let mut glob_path = "conf/development/*";
   let mut settings = Config::default();
 
-  let key = "RUST_ENV";
-  let run_mode = match std::env::var(key) {
+  let run_mode = match std::env::var("RUST_ENV") {
     Ok(value) => value,
     Err(_) => String::new()
   };
