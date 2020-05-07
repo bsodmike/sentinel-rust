@@ -9,9 +9,10 @@ use crate::dbslave;
 use crate::dbslave::alertable;
 use crate::utils;
 use crate::alerts;
-
-#[macro_use]
-use crate::log;
+use crate::log::LevelFilter;
+use crate::log4rs::append::file::FileAppender;
+use crate::log4rs::encode::pattern::PatternEncoder;
+use crate::log4rs::config::{Appender, Config, Root};
 
 mod notify;
 
@@ -44,19 +45,33 @@ impl WrappedDateTime {
 }
 
 impl WrappedDateTime {
+  pub fn naive_utc(&self) -> NaiveDateTime {
+    self.0.naive_utc()
+  }
+}
+
+impl WrappedDateTime {
   pub fn add_minutes(&self, mins: i64) -> WrappedDateTime {
     let naive_dt = self.0.naive_utc() + Duration::minutes(mins);
     let dt = utils::time::to_rfc_rfc3339(naive_dt).unwrap();
     let with_tz = dt.with_timezone(&Utc);
-    
-    println!(">>>>>>> 🚀 dt.with_timezone(&Utc) {:#?}", with_tz.to_rfc2822());
-    println!(">>>>>>>>>> add {} mins", -(mins));
-    println!(">>>>>>> NOW {:#?}", Utc::now().to_rfc2822());
-
 
     WrappedDateTime::new(with_tz)
   }
 }
+
+#[test]
+fn test_add_minutes() {
+  let mins: i64 = 30;
+  let naive_dt = Utc::now().naive_utc();
+  let naive_wrapped = WrappedDateTime::default()
+    .add_minutes(mins).
+    naive_utc();
+
+  let duration = naive_wrapped.signed_duration_since(naive_dt);
+  assert_eq!(duration.num_minutes(), mins);
+}
+
 
 #[derive(Default, Debug)]
 pub struct Alert<DataType> {
@@ -203,28 +218,34 @@ pub async fn begin_watch() -> Result<(), Error>{
   // "Night gathers, and now my watch begins. It shall not end until my death. I shall take no wife, hold no lands, father no children. I shall wear no crowns and win no glory. I shall live and die at my post. I am the sword in the darkness. I am the watcher on the walls. I am the shield that guards the realms of men. I pledge my life and honor to the Night's Watch, for this night and all the nights to come."
   // ―The Night's Watch oath
 
+  // Prep Logging
+  let logfile = FileAppender::builder()
+  .encoder(Box::new(PatternEncoder::new("{l}: {d(%Y-%m-%d %H:%M:%S %Z)(utc)} - Line {L} File {f} - {m}\n")))
+  .build("log/info.log")?;
+
+  let config = Config::builder()
+    .appender(Appender::builder().build("logfile", Box::new(logfile)))
+    .build(Root::builder()
+              .appender("logfile")
+              .build(LevelFilter::Info))?;
+
+  log4rs::init_config(config)?;
+  // Logging END
+
   // Initialise main queue
   let mut queue = alerts::queue::add::<dbslave::DBSlaveStatus>().await.unwrap();
-  println!("Queue initialised: {:#?}", queue);
+  info!("Queue initialised: {:#?}", queue);
 
   // Inititalise sent queue
   let mut sent_queue = SentAlerts::initialise().await.unwrap();
-  println!("Sent Queue initialised {:#?}", sent_queue);
-
-  // let dummy_created_at = WrappedDateTime::default().add_minutes(-29);
-  // let mut dummy_alert: Alert<dbslave::DBSlaveStatus> = Alert::default();
-  // dummy_alert.created_at = dummy_created_at.to_rfc3339();    
-
-  // sent_queue.add(dummy_alert).await?;
-  // println!("Sent Queue with dummy added {:#?}", sent_queue);
+  info!("Sent Queue initialised {:#?}", sent_queue);
 
   let mut loop_counter: i64 = 0;
 
   // Primary run-loop
   loop {
-    println!("MAIN Loop Start 🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀 {}", loop_counter);
-    println!("Sent Queue: {:#?}", sent_queue);
-
+    let now = time::Instant::now();
+    info!("MAIN Loop Start 🐶🐶🐶🐶🐶🐶 {}", loop_counter);
 
     // Enabling mock data PREVENTS making actual calls to a live dbslave server.
     let enable_mock_data = true;
@@ -239,35 +260,10 @@ pub async fn begin_watch() -> Result<(), Error>{
 
     let (data, db_status) = check_dbslave(query_data).await.unwrap();
     let (notify_now, slave_data) = alertable::run(data.clone()).await?;
-    
-
-
-
-    let dummy_created_at = WrappedDateTime::default().add_minutes(-31);
-    let dummy_created_at_rfc3339 = dummy_created_at.to_rfc3339();
-    println!("Dummy created at {:#?}", dummy_created_at.to_rfc2822());
-    println!("Dummy created at as RFC3339 {:#?}", dummy_created_at_rfc3339);
-
-    // TEMP
-    let mut test_alert = Alert {
-      data: slave_data.clone(),
-      template: dbslave_notification_template(&db_status).await.unwrap(),
-      created_at: dummy_created_at_rfc3339
-    };
-    // TEMP
-    
-    println!("-----FIELD {:#?}", test_alert.created_at);
-    let parsed = utils::time::from_rfc_rfc3339(&test_alert.created_at).unwrap();
-    println!("-----parsed {:#?}", parsed.to_rfc2822());
-
-
-    let sent_queue_length = sent_queue.sent_queue.len();
-    println!("🎃🎃🎃🎃🎃🎃🎃🎃🎃 Sent Queue LENGTH {}", sent_queue_length);
-    println!("🎃🎃🎃🎃🎃🎃🎃🎃🎃 Notify now: {:#?}", notify_now);
-
+  
     if notify_now {
-      if sent_queue_length <= 0 {
-        println!("🐤🐤🐤🐤🐤🐤🐤🐤🐤 Sent queue is empty, this is the first loop!");
+      if sent_queue.sent_queue.len() <= 0 {
+        info!("🐤🐤🐤🐤🐤🐤🐤🐤🐤 Sent queue is empty.");
 
         // Sent queue is empty, good to notify now.
         let mut alert = Alert {
@@ -277,42 +273,42 @@ pub async fn begin_watch() -> Result<(), Error>{
         };  
   
         queue.add(alert).await?;
-        println!("Now: 🚀🚀🚀 Added alert to queue.");
+        info!("BR1: Main Queue: 🚀🚀🚀 Added alert to queue.");
 
-        let mut sent_alert = Alert {
-          data: slave_data.clone(),
+        alert = Alert {
+          data: slave_data,
           template: dbslave_notification_template(&db_status).await.unwrap(),
           created_at: WrappedDateTime::default().to_rfc3339(),
         };    
-        sent_queue.add(sent_alert).await?;
-        println!("Now: Sent Queue: Added sent alert to queue.");
-        // println!("Sent queue {:#?}", sent_queue.sent().await.unwrap());
-        println!("Now: 📦📦📦 Sent queue length {:#?}", sent_queue.sent_queue.len());
+        sent_queue.add(alert).await?;
+        info!("BR1: Sent Queue: 📦📦📦 Added sent alert to queue.");
+        info!("BR1: 📦📦📦 Sent queue length {:#?}", sent_queue.sent_queue.len());
       } else {
         // Need to check last sent item to prevent spamming notifications
-        println!("🎃🎃🎃🎃🎃🎃🎃🎃🎃 Sent Queue LENGTH {}", sent_queue_length);
+        info!("BR2: 📦📦📦 Sent queue length {:#?}", sent_queue.sent_queue.len());
+        info!("BR2: About to `pop_back()` in Send queue");
 
         // NOTE: Notice a call is made to `VecDeque::pop_back()` and any calls to
         // `push_back()` will have a circular effect, i.e. the accumulator will
         // not grow, but certainly the most recently pushed will be stored.
         match sent_queue.sent_queue.pop_back() {
           Some(queue_item) => {
-            println!("🐷🐷🐷🐷🐷🐷🐷 Sent Queue Inside SOME {:#?}", queue_item);
-            println!("🐷🐷🐷🐷🐷🐷🐷 Some: Loop count {}", loop_counter);
+            info!("🐷🐷🐷🐷🐷🐷🐷 Sent Queue Inside SOME\n{:#?}", queue_item);
+            info!("🐷🐷🐷🐷🐷🐷🐷 Some: Loop count {}", loop_counter);
 
             let parsed = utils::time::from_rfc_rfc3339(&queue_item.created_at);
             let parsed_ref = parsed.unwrap();
             let current_time =  utils::time::parse_utc_time_to_rfc_rfc3339(Utc::now());
             let alert_timestamp = parsed_ref;
   
-            println!("Current time {:#?}", current_time.to_rfc2822());
-            println!("Alert parsed timestamp {:#?}", parsed_ref.to_rfc2822());
+            info!("Current time {:#?}", current_time.to_rfc2822());
+            info!("Alert parsed timestamp {:#?}", parsed_ref.to_rfc2822());
   
             let threshold: i64 = 30;
             let process_alerts = utils::time::occurred_more_than_mins_ago(alert_timestamp, current_time, 30);
-            println!("Alert occured before threshold({} mins)? {}", threshold, process_alerts);
+            info!("Alert occured before threshold({} mins)? {}", threshold, process_alerts);
   
-            println!("🐷🐷🐷🐷🐷🐷🐷 Some: Process??? {}", process_alerts);
+            info!("🐷🐷🐷🐷🐷🐷🐷 Some: Process??? {}", process_alerts);
 
            
             // if process_alerts {
@@ -324,19 +320,18 @@ pub async fn begin_watch() -> Result<(), Error>{
               };    
       
               queue.add(alert).await.unwrap();
-              println!("🚀🚀🚀 Some: Added alert to queue.");
-              println!("Queue: {:#?}", queue);
+              info!("Some: Main Queue: 🚀🚀🚀 Added alert to queue.");
       
-              let mut sent_alert = Alert {
-                data: slave_data.clone(),
+              alert = Alert {
+                data: slave_data,
                 template: dbslave_notification_template(&db_status).await.unwrap(),
                 created_at: WrappedDateTime::default().to_rfc3339(),
               };    
 
-              // sent_queue.add(sent_alert).await.unwrap();
-              println!("Some: Sent Queue: Added sent alert to queue.");
-              println!("Sent queue {:#?}", sent_queue.sent().await.unwrap());
-              println!("Some: 📦📦📦 Sent queue length {:#?}", sent_queue.sent_queue.len());
+              info!("Some: Sent Queue: 📦📦📦 Sent queue length {:#?}", sent_queue.sent_queue.len());
+              sent_queue.add(alert).await.unwrap();
+              info!("Some: Sent Queue: 📦📦📦 Added alert to SENT queue.");
+              info!("Some: Sent Queue: 📦📦📦 Sent queue length {:#?}", sent_queue.sent_queue.len());
             }
           },
           None => {
@@ -352,12 +347,11 @@ pub async fn begin_watch() -> Result<(), Error>{
     // Threads handling
     let mut handler = Handler;
     let r_client = RtmClient::get_client(&mut handler).unwrap();
-    let now = time::Instant::now();
 
     let mut loop_done = false;
     while !loop_done {
-      let mut queue_len = queue.len().unwrap();
-      println!("🚀🚀🚀 Inside queue reduction loop. Queue length: {:#?} / Elapsed {:#?}", queue_len, now.elapsed());
+      let queue_len = queue.len().unwrap();
+      info!("🚀🚀🚀 Inside queue reduction loop. Queue length: {:#?} / Elapsed {:#?}", queue_len, now.elapsed());
 
       if queue_len > 0 {
         let current_alert = queue.queue.remove(0);
@@ -365,13 +359,13 @@ pub async fn begin_watch() -> Result<(), Error>{
         let sender = r_client.sender().clone();
         // Thread
         let handle = thread::spawn(move || {
-          println!("spawn thread: ...");
+          info!("spawn thread: ...");
           
           match sender.send_message(current_alert) {
             Ok(value) => value,
             Err(error) => panic!("Err: {:#?}", error)
           };
-          println!("🚀🚀🚀 Added alert to channel-queue. Elapsed {:#?}", now.elapsed());
+          info!("🚀🚀🚀 Added alert to channel-queue. Elapsed {:#?}", now.elapsed());
         });
 
         // Disabled to prevent blocking the Main thread.
@@ -381,20 +375,20 @@ pub async fn begin_watch() -> Result<(), Error>{
       }
     }
 
-    println!("🚀🚀🚀 Queue is now empty! et voilà! Elapsed {:#?}\n\n{:#?}", now.elapsed(), queue);
+    info!("🚀🚀🚀 Queue is now empty! et voilà! Elapsed {:#?}\n\n{:#?}", now.elapsed(), queue);
 
     // Main thread
     for i in 1..20 {
       // println!("Main thread: {}!", i);
       thread::sleep(time::Duration::from_millis(1));
     }
-    println!("Main thread loop end: {:#?}", now.elapsed());
+    info!("Main thread loop end: {:#?}", now.elapsed());
 
     // Notification processing loop
     let mut done = false;
     while !done {
       for alert in r_client.rx.try_iter() {
-        println!("Received queue item {:#?}, elapsed {:#?}", alert, now.elapsed());
+        info!("Received queue item {:#?}, elapsed {:#?}", alert, now.elapsed());
         
         // Send alert here.
         // notify::notify_slack(&alert.template).await;
@@ -403,10 +397,13 @@ pub async fn begin_watch() -> Result<(), Error>{
       done = true;
     }
 
-    println!("🚀 Pausing main loop. Elapsed: {:#?}", now.elapsed());
-    thread::sleep(time::Duration::from_millis(5000));
-    println!("Continuing now. Elapsed {:#?}", now.elapsed());
-    println!("MAIN Loop Bottom 😸😸😸😸😸😸😸😸😸😸😸😸 {}", loop_counter);
+    let pause_main: u64 = 5000;
+    info!("🚀 Pausing main loop. Elapsed: {:#?}", now.elapsed());
+    thread::sleep(time::Duration::from_millis(pause_main));
+    info!("🚀 Continuing main loop. Elapsed: {:#?}", now.elapsed());
+
+    info!("MAIN Loop Bottom 😸😸😸😸😸😸😸😸😸😸😸😸 {}", loop_counter);
+
     loop_counter = loop_counter + 1;
   }
 }

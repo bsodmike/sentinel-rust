@@ -43,8 +43,6 @@ pub fn to_rfc_rfc3339(naive_dt: chrono::NaiveDateTime) -> Result<DateTime<FixedO
 }
 
 pub fn occurred_more_than_mins_ago(timestamp: DateTime<FixedOffset>, now: DateTime<FixedOffset>, mins: i64) -> bool {
-  let mut result = false;
-
   // timestamp is in the past
   let timestamp_naive = timestamp.naive_utc();
   let now_naive = now.naive_utc();

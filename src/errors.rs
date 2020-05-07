@@ -10,6 +10,8 @@ pub enum Error {
   HyperHTTP(hyper::http::Error),
   Serde(error::Error),
   Sqlx(sqlx::Error),
+  Log4rs(log4rs::config::Errors),
+  Log(log::SetLoggerError),
   /// Errors that do not fit under the other types
   Internal(String),
   UnexpectedJson,
@@ -25,25 +27,25 @@ pub enum Error {
 
 impl From<hyper::Error> for Error {
   fn from(err: hyper::Error) -> Error {
-      Error::Hyper(err)
+    Error::Hyper(err)
   }
 }
 
 impl From<hyper::http::Error> for Error {
   fn from(err: hyper::http::Error) -> Error {
-      Error::HyperHTTP(err)
+    Error::HyperHTTP(err)
   }
 }
 
 impl From<error::Error> for Error {
   fn from(err: error::Error) -> Error {
-      Error::Serde(err)
+    Error::Serde(err)
   }
 }
 
 impl From<sqlx::Error> for Error {
   fn from(err: sqlx::Error) -> Error {
-      Error::Sqlx(err)
+    Error::Sqlx(err)
   }
 }
 
@@ -53,9 +55,21 @@ impl From<chrono::ParseError> for Error {
   }
 }
 
+impl From<log4rs::config::Errors> for Error {
+  fn from(err: log4rs::config::Errors) -> Error {
+    Error::Log4rs(err)
+  }
+}
+
+impl From<log::SetLoggerError> for Error {
+  fn from(err: log::SetLoggerError) -> Error {
+    Error::Log(err)
+  }
+}
+
 impl From<io::Error> for Error {
   fn from(err: io::Error) -> Error {
-      Error::Internal(format!("{:?}", err))
+    Error::Internal(format!("{:?}", err))
   }
 }
 
@@ -67,7 +81,7 @@ impl std::error::Error for Error {
 
 impl std::fmt::Display for Error {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-      write!(f, "Unknown error!")
+    write!(f, "Unknown error!")
   }
 }
 
