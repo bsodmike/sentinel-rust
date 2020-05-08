@@ -115,26 +115,6 @@ impl RtmClient {
   }
 }
 
-async fn check_dbslave(query_data: &Vec<dbslave::DBSlaveStatus>) -> Result<(String), Error> {
-  let beijing_timestamp = utils::time::get_beijing_timestamp_as_rfc2822();
-
-  let data = &query_data[0];
-  let message = String::new() +
-    &format!("\\n\\n*Timestamp (Beijing)*: {}\\n\\n", beijing_timestamp) +
-    &format!("Master host: {}\\n", &data.master_host) +
-    &format!("Master user: {}\\n", &data.master_user) +
-    &format!("Slave IO running: {}\\n", &data.slave_io_running) +
-    &format!("Slave SQL running: {}\\n", &data.slave_sql_running) +
-    &format!("Master log file: {}\\n", &data.master_log_file) +
-    &format!("Master log pos: {}\\n", data.read_master_log_pos) +
-    &format!("Relay log file: {}\\n", &data.relay_log_file) +
-    &format!("Relay log pos: {}\\n", data.relay_log_pos) +
-    &format!("Relay master log file: {}\\n", &data.relay_master_log_file) +
-    &format!("Slave seconds behind master: {}\\n\\n", data.seconds_behind_master);
-
-  Ok(message)
-}
-
 async fn dbslave_notification_template(message: &str) -> Result<String, Error>{
     let mut template = String::new();
     template.push_str(&String::from(r#"
@@ -210,7 +190,7 @@ pub async fn begin_watch() -> Result<(), Error>{
     let now = time::Instant::now();
     info!("MAIN Loop Start 🐶🐶🐶🐶🐶🐶 {}", loop_counter);
 
-    let query_data: Vec<dbslave::DBSlaveStatus>;
+    let mut query_data: Vec<dbslave::DBSlaveStatus>;
     
     if enable_mock_data {
       query_data = dbslave::fetch_mocked::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
@@ -218,8 +198,8 @@ pub async fn begin_watch() -> Result<(), Error>{
       query_data = dbslave::fetch::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
     }
 
-    let db_status = check_dbslave(&query_data).await.unwrap();
-    let notify_now = alertable::run(&query_data[0]).await?;
+    // let db_status = check_dbslave(&query_data).await.unwrap();
+    let (notify_now, db_status) = alertable::run(&mut query_data[0]).await?;
     let slave_data = query_data[0].clone();
     
     info!(" =>>>> Notify Now {}", notify_now);    
