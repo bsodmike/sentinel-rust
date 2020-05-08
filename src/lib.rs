@@ -22,6 +22,7 @@ pub mod dbslave;
 pub mod slack;
 pub mod monitor;
 pub mod alerts;
+pub mod wrappers;
 
 use config::*;
 use glob::glob;
@@ -38,7 +39,7 @@ pub static CONFIG: Lazy<config::Config> = Lazy::new(|| {
 
   if run_mode.eq("production") {
     glob_path = "conf/production/*";
-    println!("Run mode {}", run_mode);
+    println!("RUST_ENV={}", run_mode);
   }
   
   settings

@@ -4,7 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::collections::VecDeque;
-use chrono::{DateTime, Utc, NaiveDateTime, Duration};
+use std::time::Duration;
+use ::chrono::{Utc};
 use crate::dbslave;
 use crate::dbslave::alertable;
 use crate::utils;
@@ -13,64 +14,10 @@ use crate::log::LevelFilter;
 use crate::log4rs::append::file::FileAppender;
 use crate::log4rs::encode::pattern::PatternEncoder;
 use crate::log4rs::config::{Appender, Config, Root};
+use crate::wrappers;
+use crate::configure;
 
 mod notify;
-
-#[derive(Debug)]
-pub struct WrappedDateTime(chrono::DateTime<chrono::Utc>);
-
-impl WrappedDateTime {
-  pub fn new(dt: chrono::DateTime<chrono::Utc>) -> WrappedDateTime {
-    WrappedDateTime(dt)
-  }
-}
-
-impl std::default::Default for WrappedDateTime {
-  fn default() -> WrappedDateTime {
-    let utc = Utc::now().with_timezone(&Utc);
-    WrappedDateTime::new(utc)
-  }
-}
-
-impl WrappedDateTime {
-  pub fn to_rfc2822(&self) -> String {
-    self.0.to_rfc2822()
-  }
-}
-
-impl WrappedDateTime {
-  pub fn to_rfc3339(&self) -> String {
-    self.0.to_rfc3339()
-  }
-}
-
-impl WrappedDateTime {
-  pub fn naive_utc(&self) -> NaiveDateTime {
-    self.0.naive_utc()
-  }
-}
-
-impl WrappedDateTime {
-  pub fn add_minutes(&self, mins: i64) -> WrappedDateTime {
-    let naive_dt = self.0.naive_utc() + Duration::minutes(mins);
-    let dt = utils::time::to_rfc_rfc3339(naive_dt).unwrap();
-    let with_tz = dt.with_timezone(&Utc);
-
-    WrappedDateTime::new(with_tz)
-  }
-}
-
-#[test]
-fn test_add_minutes() {
-  let mins: i64 = 30;
-  let naive_dt = Utc::now().naive_utc();
-  let naive_wrapped = WrappedDateTime::default()
-    .add_minutes(mins).
-    naive_utc();
-
-  let duration = naive_wrapped.signed_duration_since(naive_dt);
-  assert_eq!(duration.num_minutes(), mins);
-}
 
 
 #[derive(Default, Debug)]
@@ -168,30 +115,6 @@ impl RtmClient {
   }
 }
 
-async fn check_dbslave(query_data: Vec<dbslave::DBSlaveStatus>) -> Result<(dbslave::DBSlaveStatus, String), Error> {
-  let beijing_timestamp = utils::time::get_beijing_timestamp_as_rfc2822();
-
-  let result = query_data;
-  // println!("dbslave Result: {:#?}", result);
-
-  let mut message = String::new();
-  let data = &result[0];
-  message.push_str(&format!("\\n\\n*Timestamp (Beijing)*: {}\\n\\n", beijing_timestamp)[..]);
-  message.push_str(&(format!("Master host: {}\\n", &data.master_host[..]))[..]);
-  message.push_str(&(format!("Master user: {}\\n", &data.master_user[..]))[..]);
-  message.push_str(&(format!("Slave IO running: {}\\n", &data.slave_io_running[..]))[..]);
-  message.push_str(&(format!("Slave SQL running: {}\\n", &data.slave_sql_running[..]))[..]);
-  message.push_str(&(format!("Master log file: {}\\n", &data.master_log_file[..]))[..]);
-  message.push_str(&(format!("Master log pos: {}\\n", data.read_master_log_pos))[..]);
-  message.push_str(&(format!("Relay log file: {}\\n", &data.relay_log_file[..]))[..]);
-  message.push_str(&(format!("Relay log pos: {}\\n", data.relay_log_pos))[..]);
-  message.push_str(&(format!("Relay master log file: {}\\n", &data.relay_master_log_file[..]))[..]);
-  message.push_str(&(format!("Slave seconds behind master: {}\\n\\n", data.seconds_behind_master))[..]);
-
-  let returned_data = data.clone();
-  Ok((returned_data, message))
-}
-
 async fn dbslave_notification_template(message: &str) -> Result<String, Error>{
     let mut template = String::new();
     template.push_str(&String::from(r#"
@@ -232,12 +155,25 @@ pub async fn begin_watch() -> Result<(), Error>{
   log4rs::init_config(config)?;
   // Logging END
 
-  // TODO: Extract these.
   // Configuration Options
   // Antispam throttling threshold in minutes.
-  let antispam_threshold: i64 = 2;
+  let antispam_threshold_config = configure::fetch::<String>(String::from("antispam_threshold")).unwrap();
+  let antispam_threshold: i64 = antispam_threshold_config.parse::<i64>().unwrap();
+  info!("Configuration: antispam_threshold: {:#?}", antispam_threshold);
+
   // Enabling mock data PREVENTS making actual calls to a live dbslave server.
-  let enable_mock_data = true;
+  let enable_mock_data: bool = configure::fetch::<bool>(String::from("enable_mock_data")).unwrap();
+  info!("Configuration: enable_mock_data: {:#?}", enable_mock_data);
+
+  // Enable mocked notifications
+  let enable_mock_notifications: bool = configure::fetch::<bool>(String::from("enable_mock_notifications")).unwrap();
+  info!("Configuration: enable_mock_notifications: {:#?}", enable_mock_notifications);
+
+  // Main-loop blocking pause. Hard coded to 5s for development and 5 minutes
+  // for production use.
+  let main_thread_pause_config = configure::fetch::<String>(String::from("main_thread_pause")).unwrap();
+  let main_thread_pause: u64 = main_thread_pause_config.parse::<u64>().unwrap();
+  info!("Configuration: antispam_threshold: {:#?}", main_thread_pause);
 
   // Initialise main queue
   let mut queue = alerts::queue::add::<dbslave::DBSlaveStatus>().await.unwrap();
@@ -254,7 +190,7 @@ pub async fn begin_watch() -> Result<(), Error>{
     let now = time::Instant::now();
     info!("MAIN Loop Start 🐶🐶🐶🐶🐶🐶 {}", loop_counter);
 
-    let query_data: Vec<dbslave::DBSlaveStatus>;
+    let mut query_data: Vec<dbslave::DBSlaveStatus>;
     
     if enable_mock_data {
       query_data = dbslave::fetch_mocked::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
@@ -262,9 +198,9 @@ pub async fn begin_watch() -> Result<(), Error>{
       query_data = dbslave::fetch::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
     }
 
-    let (data, db_status) = check_dbslave(query_data).await.unwrap();
-    let notify_now = alertable::run(&data).await?;
-    let slave_data = data;
+    // let db_status = check_dbslave(&query_data).await.unwrap();
+    let (notify_now, db_status) = alertable::run(&mut query_data[0]).await?;
+    let slave_data = query_data[0].clone();
     
     info!(" =>>>> Notify Now {}", notify_now);    
     if notify_now {
@@ -275,21 +211,16 @@ pub async fn begin_watch() -> Result<(), Error>{
         let mut alert = Alert {
           data: slave_data.clone(),
           template: dbslave_notification_template(&db_status).await.unwrap(),
-          created_at: WrappedDateTime::default().to_rfc3339(),
+          created_at: wrappers::chrono::WrappedDateTime::default().to_rfc3339(),
         };  
   
         queue.add(alert).await?;
         info!("BR1: Main Queue: 🚀🚀🚀 Added alert to queue.");
 
-        // // TEST HARNESS
-        // let wrapper = WrappedDateTime::default();
-        // let dt = wrapper.add_minutes(-31);
-        // // TEST HARNESS END
-
         alert = Alert {
           data: slave_data,
           template: dbslave_notification_template(&db_status).await.unwrap(),
-          created_at: WrappedDateTime::default().to_rfc3339(),
+          created_at: wrappers::chrono::WrappedDateTime::default().to_rfc3339(),
         };    
         sent_queue.add(alert).await?;
         info!("BR1: Sent Queue: 📦📦📦 Added sent alert to queue.");
@@ -328,7 +259,7 @@ pub async fn begin_watch() -> Result<(), Error>{
               let mut alert = Alert {
                 data: slave_data.clone(),
                 template: dbslave_notification_template(&db_status).await.unwrap(),
-                created_at: WrappedDateTime::default().to_rfc3339(),
+                created_at: wrappers::chrono::WrappedDateTime::default().to_rfc3339(),
               };    
       
               queue.add(alert).await.unwrap();
@@ -337,7 +268,7 @@ pub async fn begin_watch() -> Result<(), Error>{
               alert = Alert {
                 data: slave_data,
                 template: dbslave_notification_template(&db_status).await.unwrap(),
-                created_at: WrappedDateTime::default().to_rfc3339(),
+                created_at: wrappers::chrono::WrappedDateTime::default().to_rfc3339(),
               };    
 
               // NOTE: Further enforce that we are performing a `push_back()`
@@ -362,8 +293,6 @@ pub async fn begin_watch() -> Result<(), Error>{
 
               let parsed = utils::time::from_rfc_rfc3339(&queue_item.created_at);
               let parsed_ref = parsed.unwrap();
-              // let wrapper = WrappedDateTime::default();
-              // let dt = wrapper.add_minutes(-50);
 
               let alert = Alert {
                 data: slave_data,
@@ -422,7 +351,7 @@ pub async fn begin_watch() -> Result<(), Error>{
       // println!("Main thread: {}!", i);
       thread::sleep(time::Duration::from_millis(1));
     }
-    info!("Main thread loop end: {:#?}", now.elapsed());
+    info!("Main thread loop end / Elapsed {:#?}", now.elapsed());
 
     // Notification processing loop
     let mut done = false;
@@ -430,33 +359,61 @@ pub async fn begin_watch() -> Result<(), Error>{
       for alert in r_client.rx.try_iter() {
         info!("Received queue item {:#?}, elapsed {:#?}", alert, now.elapsed());
         
-        // Send alert here.
-        notify::notify_slack(&alert.template).await;
-        info!("Notification sent to slack {}", &alert.template);
+        // Send notifications.
+        let utc_timestamp = Utc::now().to_rfc2822();
+        let elapsed = now.elapsed();
+        
+        process_notifications(
+          &enable_mock_notifications,
+          &utc_timestamp,
+          &elapsed,
+          &loop_counter,
+          &alert.template
+        ).await.unwrap();
       }
-
       done = true;
     }
 
-    let mut pause_main: u64 = 5000;
-
-    // PRODUCTION
-    let run_mode = match std::env::var("RUST_ENV") {
-      Ok(value) => value,
-      Err(_) => String::new()
-    };
-  
-    if run_mode.eq("production") {
-      pause_main = 300000; // 5 minutes.
-    }
-    // PRODUCTION
-
-    info!("🚀 Pausing main loop. Elapsed: {:#?}", now.elapsed());
-    thread::sleep(time::Duration::from_millis(pause_main));
-    info!("🚀 Continuing main loop. Elapsed: {:#?}", now.elapsed());
+    info!("🚀 Pausing main thread for {} mins / Elapsed: {:#?}", main_thread_pause, now.elapsed());
+    thread::sleep(time::Duration::from_millis(main_thread_pause));
+    info!("🚀 Continuing main thread. Elapsed: {:#?}", now.elapsed());
 
     info!("MAIN Loop Bottom 😸😸😸😸😸😸😸😸😸😸😸😸 {}", loop_counter);
 
     loop_counter = loop_counter + 1;
   }
+}
+
+pub async fn process_notifications(enable_mocks: &bool, now: &String, elapsed: &Duration, loop_count: &i64, template: &str) -> Result<(), Error>{
+  if *enable_mocks {
+      println!("==> Mocked: Notification sent: Now: {} / Elapsed {:#?} / Loop {}",
+        *now,
+        *elapsed,
+        *loop_count
+      );
+
+      info!("==> Mocked: Notification sent: Now: {} / Elapsed {:#?} / Loop {}\nTemplate: {:#?} ",
+        *now,
+        *elapsed,
+        *loop_count,
+        template
+      );
+    } else {         
+      notify::notify_slack(template).await;
+      info!("==> Live: Notification sent: Now: {} / Elapsed {:#?} / Loop {}\nTemplate: {:#?} ",
+        *now,
+        *elapsed,
+        *loop_count,
+        template
+      );
+
+      println!("==> Live: Notification sent: Now: {} / Elapsed {:#?} / Loop {}",
+        *now,
+        *elapsed,
+        *loop_count
+      );
+    }
+  
+
+  Ok(())
 }

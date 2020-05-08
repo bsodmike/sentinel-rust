@@ -1,8 +1,10 @@
+use std::panic;
 use crate::sqlx::Cursor;
 use crate::sqlx::Row;
 use crate::errors::Error;
 use async_trait::async_trait;
 use crate::configure;
+use crate::alerts;
 
 pub mod alertable;
 
@@ -26,7 +28,13 @@ pub struct DBSlaveStatus {
   pub relay_log_file: String,
   pub relay_log_pos: u64,
   pub relay_master_log_file: String,
-  pub seconds_behind_master: u64,
+  pub seconds_behind_master: String,
+}
+
+impl std::convert::AsRef<DBSlaveStatus> for DBSlaveStatus {
+  fn as_ref(&self) -> &DBSlaveStatus {
+    self
+  }
 }
 
 impl Default for DBSlaveStatus {
@@ -41,7 +49,7 @@ impl Default for DBSlaveStatus {
       relay_log_file: String::new(),
       relay_log_pos: 0,
       relay_master_log_file: String::new(),
-      seconds_behind_master: 0,
+      seconds_behind_master: String::from("0"),
     }
   }
 }
@@ -64,20 +72,40 @@ impl Fetch<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
     let mut cursor = sqlx::query(sql).fetch(&pool);
     let mut result = Vec::new();
     while let Some(row) = cursor.next().await? {
-        let data = DBSlaveStatus {
-          master_host: row.get("Master_Host"),
-          master_user: row.get("Master_User"),
-          slave_io_running: row.get("Slave_IO_Running"),
-          slave_sql_running: row.get("Slave_SQL_Running"),
-          master_log_file: row.get("Master_Log_File"),
-          read_master_log_pos: row.get("Read_Master_Log_Pos"),
-          relay_log_file: row.get("Relay_Log_File"),
-          relay_log_pos: row.get("Relay_Log_Pos"),
-          relay_master_log_file: row.get("Relay_Master_Log_File"),
-          seconds_behind_master: row.get("Seconds_Behind_Master"),
-        };
 
-        result.push(data);
+      let mut alert_state: bool = false;
+      let mut seconds_behind_master: String = String::from("0");
+      let read_behind_master = match row.try_get::<String, &str>("Seconds_Behind_Master") {
+        Ok(val) => val,
+        _ => {
+          // When DB Slave is disabled with `STOP SLAVE;` it returns
+          // Seconds_Behind_Master: NULL and sqlx raises a
+          // `UnexpectedNullError`
+          
+          // TODO: handle this as a `QueryAlert`
+          let query_alert = alerts::QueryAlert {
+            warning: String::from("DB Slave returned `Seconds_Behind_Master: NULL`")
+          };
+          alert_state = true;
+
+          String::from("0")
+        }
+      };
+
+      let data = DBSlaveStatus {
+        master_host: row.get("Master_Host"),
+        master_user: row.get("Master_User"),
+        slave_io_running: row.get("Slave_IO_Running"),
+        slave_sql_running: row.get("Slave_SQL_Running"),
+        master_log_file: row.get("Master_Log_File"),
+        read_master_log_pos: row.get("Read_Master_Log_Pos"),
+        relay_log_file: row.get("Relay_Log_File"),
+        relay_log_pos: row.get("Relay_Log_Pos"),
+        relay_master_log_file: row.get("Relay_Master_Log_File"),
+        seconds_behind_master: read_behind_master,
+      };
+
+      result.push(data);
     }
     
     Ok(result)
@@ -112,8 +140,8 @@ impl FetchMock<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
   async fn fetch_mock_status(&self) -> Result<Vec<DBSlaveStatus>, Error> {
     let mut status = DBSlaveStatus::default();
     status.slave_io_running = String::from("Yes");
-    status.slave_sql_running = String::from("No");
-    status.seconds_behind_master = 300;
+    status.slave_sql_running = String::from("Yes");
+    status.seconds_behind_master = String::from("320");
 
     Ok(vec![status])
   }
