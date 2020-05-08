@@ -140,8 +140,8 @@ impl FetchMock<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
   async fn fetch_mock_status(&self) -> Result<Vec<DBSlaveStatus>, Error> {
     let mut status = DBSlaveStatus::default();
     status.slave_io_running = String::from("Yes");
-    status.slave_sql_running = String::from("No");
-    status.seconds_behind_master = String::from("300");
+    status.slave_sql_running = String::from("Yes");
+    status.seconds_behind_master = String::from("320");
 
     Ok(vec![status])
   }
