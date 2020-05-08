@@ -3,3 +3,7 @@
   cli_options: false
   slack_url: "https://hooks.slack.com/services/X06SZA5DJ/X013B1FBZFB/xXTUulsWLrEx9K1gMpQkU6wml"
   mysql_url: ""
+  main_thread_pause: "120000"
+  antispam_threshold: "5"
+  enable_mock_data: false
+  enable_mock_notifications: false
