@@ -15,6 +15,7 @@ use crate::log4rs::append::file::FileAppender;
 use crate::log4rs::encode::pattern::PatternEncoder;
 use crate::log4rs::config::{Appender, Config, Root};
 use crate::wrappers;
+use crate::configure;
 
 mod notify;
 
@@ -178,28 +179,25 @@ pub async fn begin_watch() -> Result<(), Error>{
   log4rs::init_config(config)?;
   // Logging END
 
-  // TODO: Extract these.
   // Configuration Options
   // Antispam throttling threshold in minutes.
-  let antispam_threshold: i64 = 2;
+  let antispam_threshold_config = configure::fetch::<String>(String::from("antispam_threshold")).unwrap();
+  let antispam_threshold: i64 = antispam_threshold_config.parse::<i64>().unwrap();
+  info!("Configuration: antispam_threshold: {:#?}", antispam_threshold);
+
   // Enabling mock data PREVENTS making actual calls to a live dbslave server.
-  let enable_mock_data = true;
+  let enable_mock_data: bool = configure::fetch::<bool>(String::from("enable_mock_data")).unwrap();
+  info!("Configuration: enable_mock_data: {:#?}", enable_mock_data);
+
   // Enable mocked notifications
-  let enable_mock_notifications = true;
+  let enable_mock_notifications: bool = configure::fetch::<bool>(String::from("enable_mock_notifications")).unwrap();
+  info!("Configuration: enable_mock_notifications: {:#?}", enable_mock_notifications);
+
   // Main-loop blocking pause. Hard coded to 5s for development and 5 minutes
   // for production use.
-  let mut pause_main: u64 = 5000;
-
-  // PRODUCTION
-  let run_mode = match std::env::var("RUST_ENV") {
-    Ok(value) => value,
-    Err(_) => String::new()
-  };
-
-  if run_mode.eq("production") {
-    pause_main = 300000; // 5 minutes.
-  }
-  // PRODUCTION
+  let main_thread_pause_config = configure::fetch::<String>(String::from("main_thread_pause")).unwrap();
+  let main_thread_pause: u64 = main_thread_pause_config.parse::<u64>().unwrap();
+  info!("Configuration: antispam_threshold: {:#?}", main_thread_pause);
 
   // Initialise main queue
   let mut queue = alerts::queue::add::<dbslave::DBSlaveStatus>().await.unwrap();
@@ -400,9 +398,9 @@ pub async fn begin_watch() -> Result<(), Error>{
       done = true;
     }
 
-    info!("🚀 Pausing main loop. Elapsed: {:#?}", now.elapsed());
-    thread::sleep(time::Duration::from_millis(pause_main));
-    info!("🚀 Continuing main loop. Elapsed: {:#?}", now.elapsed());
+    info!("🚀 Pausing main thread for {} mins / Elapsed: {:#?}", main_thread_pause, now.elapsed());
+    thread::sleep(time::Duration::from_millis(main_thread_pause));
+    info!("🚀 Continuing main thread. Elapsed: {:#?}", now.elapsed());
 
     info!("MAIN Loop Bottom 😸😸😸😸😸😸😸😸😸😸😸😸 {}", loop_counter);
 
