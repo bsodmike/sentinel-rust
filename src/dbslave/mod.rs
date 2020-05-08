@@ -29,6 +29,12 @@ pub struct DBSlaveStatus {
   pub seconds_behind_master: u64,
 }
 
+impl std::convert::AsRef<DBSlaveStatus> for DBSlaveStatus {
+  fn as_ref(&self) -> &DBSlaveStatus {
+    self
+  }
+}
+
 impl Default for DBSlaveStatus {
   fn default() -> Self {
     Self {

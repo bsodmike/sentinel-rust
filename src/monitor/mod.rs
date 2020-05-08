@@ -115,28 +115,24 @@ impl RtmClient {
   }
 }
 
-async fn check_dbslave(query_data: Vec<dbslave::DBSlaveStatus>) -> Result<(dbslave::DBSlaveStatus, String), Error> {
+async fn check_dbslave(query_data: &Vec<dbslave::DBSlaveStatus>) -> Result<(String), Error> {
   let beijing_timestamp = utils::time::get_beijing_timestamp_as_rfc2822();
 
-  let result = query_data;
-  // println!("dbslave Result: {:#?}", result);
+  let data = &query_data[0];
+  let message = String::new() +
+    &format!("\\n\\n*Timestamp (Beijing)*: {}\\n\\n", beijing_timestamp) +
+    &format!("Master host: {}\\n", &data.master_host) +
+    &format!("Master user: {}\\n", &data.master_user) +
+    &format!("Slave IO running: {}\\n", &data.slave_io_running) +
+    &format!("Slave SQL running: {}\\n", &data.slave_sql_running) +
+    &format!("Master log file: {}\\n", &data.master_log_file) +
+    &format!("Master log pos: {}\\n", data.read_master_log_pos) +
+    &format!("Relay log file: {}\\n", &data.relay_log_file) +
+    &format!("Relay log pos: {}\\n", data.relay_log_pos) +
+    &format!("Relay master log file: {}\\n", &data.relay_master_log_file) +
+    &format!("Slave seconds behind master: {}\\n\\n", data.seconds_behind_master);
 
-  let mut message = String::new();
-  let data = &result[0];
-  message.push_str(&format!("\\n\\n*Timestamp (Beijing)*: {}\\n\\n", beijing_timestamp)[..]);
-  message.push_str(&(format!("Master host: {}\\n", &data.master_host[..]))[..]);
-  message.push_str(&(format!("Master user: {}\\n", &data.master_user[..]))[..]);
-  message.push_str(&(format!("Slave IO running: {}\\n", &data.slave_io_running[..]))[..]);
-  message.push_str(&(format!("Slave SQL running: {}\\n", &data.slave_sql_running[..]))[..]);
-  message.push_str(&(format!("Master log file: {}\\n", &data.master_log_file[..]))[..]);
-  message.push_str(&(format!("Master log pos: {}\\n", data.read_master_log_pos))[..]);
-  message.push_str(&(format!("Relay log file: {}\\n", &data.relay_log_file[..]))[..]);
-  message.push_str(&(format!("Relay log pos: {}\\n", data.relay_log_pos))[..]);
-  message.push_str(&(format!("Relay master log file: {}\\n", &data.relay_master_log_file[..]))[..]);
-  message.push_str(&(format!("Slave seconds behind master: {}\\n\\n", data.seconds_behind_master))[..]);
-
-  let returned_data = data.clone();
-  Ok((returned_data, message))
+  Ok(message)
 }
 
 async fn dbslave_notification_template(message: &str) -> Result<String, Error>{
@@ -222,9 +218,9 @@ pub async fn begin_watch() -> Result<(), Error>{
       query_data = dbslave::fetch::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
     }
 
-    let (data, db_status) = check_dbslave(query_data).await.unwrap();
-    let notify_now = alertable::run(&data).await?;
-    let slave_data = data;
+    let db_status = check_dbslave(&query_data).await.unwrap();
+    let notify_now = alertable::run(&query_data[0]).await?;
+    let slave_data = query_data[0].clone();
     
     info!(" =>>>> Notify Now {}", notify_now);    
     if notify_now {
@@ -375,7 +371,7 @@ pub async fn begin_watch() -> Result<(), Error>{
       // println!("Main thread: {}!", i);
       thread::sleep(time::Duration::from_millis(1));
     }
-    info!("Main thread loop end: {:#?}", now.elapsed());
+    info!("Main thread loop end / Elapsed {:#?}", now.elapsed());
 
     // Notification processing loop
     let mut done = false;
