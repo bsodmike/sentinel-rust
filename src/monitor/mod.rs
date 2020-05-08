@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::collections::VecDeque;
+use std::time::Duration;
 use ::chrono::{Utc};
 use crate::dbslave;
 use crate::dbslave::alertable;
@@ -183,6 +184,22 @@ pub async fn begin_watch() -> Result<(), Error>{
   let antispam_threshold: i64 = 2;
   // Enabling mock data PREVENTS making actual calls to a live dbslave server.
   let enable_mock_data = true;
+  // Enable mocked notifications
+  let enable_mock_notifications = true;
+  // Main-loop blocking pause. Hard coded to 5s for development and 5 minutes
+  // for production use.
+  let mut pause_main: u64 = 5000;
+
+  // PRODUCTION
+  let run_mode = match std::env::var("RUST_ENV") {
+    Ok(value) => value,
+    Err(_) => String::new()
+  };
+
+  if run_mode.eq("production") {
+    pause_main = 300000; // 5 minutes.
+  }
+  // PRODUCTION
 
   // Initialise main queue
   let mut queue = alerts::queue::add::<dbslave::DBSlaveStatus>().await.unwrap();
@@ -225,11 +242,6 @@ pub async fn begin_watch() -> Result<(), Error>{
   
         queue.add(alert).await?;
         info!("BR1: Main Queue: 🚀🚀🚀 Added alert to queue.");
-
-        // // TEST HARNESS
-        // let wrapper = wrappers::chrono::WrappedDateTime::default();
-        // let dt = wrapper.add_minutes(-31);
-        // // TEST HARNESS END
 
         alert = Alert {
           data: slave_data,
@@ -373,26 +385,20 @@ pub async fn begin_watch() -> Result<(), Error>{
       for alert in r_client.rx.try_iter() {
         info!("Received queue item {:#?}, elapsed {:#?}", alert, now.elapsed());
         
-        // Send alert here.
-        notify::notify_slack(&alert.template).await;
-        info!("Notification sent to slack {}", &alert.template);
+        // Send notifications.
+        let utc_timestamp = Utc::now().to_rfc2822();
+        let elapsed = now.elapsed();
+        
+        process_notifications(
+          &enable_mock_notifications,
+          &utc_timestamp,
+          &elapsed,
+          &loop_counter,
+          &alert.template
+        ).await.unwrap();
       }
-
       done = true;
     }
-
-    let mut pause_main: u64 = 5000;
-
-    // PRODUCTION
-    let run_mode = match std::env::var("RUST_ENV") {
-      Ok(value) => value,
-      Err(_) => String::new()
-    };
-  
-    if run_mode.eq("production") {
-      pause_main = 300000; // 5 minutes.
-    }
-    // PRODUCTION
 
     info!("🚀 Pausing main loop. Elapsed: {:#?}", now.elapsed());
     thread::sleep(time::Duration::from_millis(pause_main));
@@ -402,4 +408,38 @@ pub async fn begin_watch() -> Result<(), Error>{
 
     loop_counter = loop_counter + 1;
   }
+}
+
+pub async fn process_notifications(enable_mocks: &bool, now: &String, elapsed: &Duration, loop_count: &i64, template: &str) -> Result<(), Error>{
+  if *enable_mocks {
+      println!("==> Mocked: Notification sent: Now: {} / Elapsed {:#?} / Loop {}",
+        *now,
+        *elapsed,
+        *loop_count
+      );
+
+      info!("==> Mocked: Notification sent: Now: {} / Elapsed {:#?} / Loop {}\nTemplate: {:#?} ",
+        *now,
+        *elapsed,
+        *loop_count,
+        template
+      );
+    } else {         
+      notify::notify_slack(template).await;
+      info!("==> Live: Notification sent: Now: {} / Elapsed {:#?} / Loop {}\nTemplate: {:#?} ",
+        *now,
+        *elapsed,
+        *loop_count,
+        template
+      );
+
+      println!("==> Live: Notification sent: Now: {} / Elapsed {:#?} / Loop {}",
+        *now,
+        *elapsed,
+        *loop_count
+      );
+    }
+  
+
+  Ok(())
 }
