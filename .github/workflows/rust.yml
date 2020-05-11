@@ -17,7 +17,7 @@ jobs:
           toolchain: stable
       - run: cargo test --verbose
   build:
-    name: Build release
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
