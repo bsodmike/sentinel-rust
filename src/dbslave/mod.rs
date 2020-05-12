@@ -75,7 +75,7 @@ impl Fetch<Result<DBSlaveStatus, Error>> for ConnectorMysql
     while let Some(row) = cursor.next().await? {
 
       let mut alert_state: bool = false;
-      let mut seconds_behind_master: String = String::from("0");
+      let seconds_behind_master: String = String::from("0");
       let read_behind_master = match row.try_get::<String, &str>("Seconds_Behind_Master") {
         Ok(val) => val,
         _ => {
@@ -89,7 +89,7 @@ impl Fetch<Result<DBSlaveStatus, Error>> for ConnectorMysql
           };
           alert_state = true;
 
-          String::from("0")
+          seconds_behind_master
         }
       };
 

@@ -16,7 +16,6 @@ use crate::log4rs::encode::pattern::PatternEncoder;
 use crate::log4rs::config::{Appender, Config, Root};
 use crate::wrappers;
 use crate::configure;
-use crate::services;
 
 mod notify;
 
