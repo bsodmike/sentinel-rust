@@ -190,17 +190,17 @@ pub async fn begin_watch() -> Result<(), Error>{
     let now = time::Instant::now();
     info!("MAIN Loop Start 🐶🐶🐶🐶🐶🐶 {}", loop_counter);
 
-    let mut query_data: Vec<dbslave::DBSlaveStatus>;
+    let mut query_data: dbslave::DBSlaveStatus;
     
     if enable_mock_data {
-      query_data = dbslave::fetch_mocked::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
+      query_data = dbslave::fetch_mocked::<dbslave::ConnectorMysql, Result<dbslave::DBSlaveStatus, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
     } else {
-      query_data = dbslave::fetch::<dbslave::ConnectorMysql, Result<Vec<dbslave::DBSlaveStatus>, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
+      query_data = dbslave::fetch::<dbslave::ConnectorMysql, Result<dbslave::DBSlaveStatus, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
     }
 
     // let db_status = check_dbslave(&query_data).await.unwrap();
-    let (notify_now, db_status) = alertable::run(&mut query_data[0]).await?;
-    let slave_data = query_data[0].clone();
+    let (notify_now, db_status) = alertable::run(&mut query_data).await?;
+    let slave_data = query_data.clone();
     
     info!(" =>>>> Notify Now {}", notify_now);    
     if notify_now {
