@@ -1,5 +1,5 @@
-use super::errors;
-use super::configure;
+use crate::errors;
+use crate::configure;
 use hyper::{Response, Body};
 
 use crate::utils::json_request;
