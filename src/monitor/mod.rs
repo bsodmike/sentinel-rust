@@ -16,9 +16,9 @@ use crate::log4rs::encode::pattern::PatternEncoder;
 use crate::log4rs::config::{Appender, Config, Root};
 use crate::wrappers;
 use crate::configure;
+use crate::services;
 
 mod notify;
-
 
 #[derive(Default, Debug)]
 pub struct Alert<DataType> {
@@ -368,7 +368,8 @@ pub async fn begin_watch() -> Result<(), Error>{
           &utc_timestamp,
           &elapsed,
           &loop_counter,
-          &alert.template
+          &alert.template,
+          &db_status
         ).await.unwrap();
       }
       done = true;
@@ -384,7 +385,7 @@ pub async fn begin_watch() -> Result<(), Error>{
   }
 }
 
-pub async fn process_notifications(enable_mocks: &bool, now: &String, elapsed: &Duration, loop_count: &i64, template: &str) -> Result<(), Error>{
+pub async fn process_notifications(enable_mocks: &bool, now: &String, elapsed: &Duration, loop_count: &i64, slack_template: &str, email_template: &str) -> Result<(), Error>{
   if *enable_mocks {
       println!("==> Mocked: Notification sent: Now: {} / Elapsed {:#?} / Loop {}",
         *now,
@@ -392,22 +393,47 @@ pub async fn process_notifications(enable_mocks: &bool, now: &String, elapsed: &
         *loop_count
       );
 
-      info!("==> Mocked: Notification sent: Now: {} / Elapsed {:#?} / Loop {}\nTemplate: {:#?} ",
+      info!("==> Mocked: Notification sent: Now: {} / Elapsed {:#?} / Loop {}",
         *now,
         *elapsed,
-        *loop_count,
-        template
+        *loop_count
       );
-    } else {         
-      notify::notify_slack(template).await;
-      info!("==> Live: Notification sent: Now: {} / Elapsed {:#?} / Loop {}\nTemplate: {:#?} ",
+    } else {
+      // Notify Slack
+      notify::notify_slack(slack_template).await;
+      info!("==> Live: Notification to Slack sent: Now: {} / Elapsed {:#?} / Loop {}\nSlack Template: {:#?}",
         *now,
         *elapsed,
         *loop_count,
-        template
+        slack_template
       );
 
-      println!("==> Live: Notification sent: Now: {} / Elapsed {:#?} / Loop {}",
+      // Notify via Postmark
+      let beijing_timestamp = utils::time::get_beijing_timestamp_as_rfc2822();
+      let subject = String::from("Sentinel Monitoring Alert: DB Slave @ ") 
+        + &beijing_timestamp
+        + " (Beijing)";
+      
+      let from_address: String = configure::fetch::<String>(String::from("postmark_from")).unwrap();
+      let replyto_address: String = configure::fetch::<String>(String::from("postmark_replyto")).unwrap();
+      let to_address: String = configure::fetch::<String>(String::from("postmark_to")).unwrap();
+      let (response, response_value) = notify::notify_postmark(
+        &subject,
+        email_template,
+        &from_address,
+        &replyto_address,
+        &to_address
+      ).await.unwrap();
+      info!("==> Live: Notification to Postmark sent: Now: {} / Elapsed {:#?} / Loop {}\nPostmark Template: {:#?} /Postmark Response Status: {}, Postmark Response: {:#?}",
+        *now,
+        *elapsed,
+        *loop_count,
+        email_template,
+        response.status(),
+        response_value
+      );
+
+      println!("==> Live: Notification(s) sent: Now: {} / Elapsed {:#?} / Loop {}",
         *now,
         *elapsed,
         *loop_count

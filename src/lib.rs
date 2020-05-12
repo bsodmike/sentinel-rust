@@ -19,7 +19,7 @@ pub mod opts;
 pub mod errors;
 pub mod utils;
 pub mod dbslave;
-pub mod slack;
+pub mod services;
 pub mod monitor;
 pub mod alerts;
 pub mod wrappers;
