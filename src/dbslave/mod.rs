@@ -84,7 +84,7 @@ impl Fetch<Result<DBSlaveStatus, Error>> for ConnectorMysql
           // `UnexpectedNullError`
           
           // TODO: handle this as a `QueryAlert`
-          let query_alert = alerts::QueryAlert {
+          let _ = alerts::QueryAlert {
             warning: String::from("DB Slave returned `Seconds_Behind_Master: NULL`")
           };
           alert_state = true;
