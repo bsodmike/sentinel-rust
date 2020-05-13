@@ -13,6 +13,7 @@ extern crate chrono;
 extern crate log;
 extern crate log4rs;
 extern crate regex;
+extern crate url;
 
 pub mod configure;
 pub mod opts;

@@ -36,6 +36,21 @@ pub async fn notify(data: &serde_json::Value) -> Result<(Response<Body>, serde_j
     Err(error) => panic!("Err: parsing JSON {:#?} / body: {:#?}", error, body_string)
   };
 
+  // Patch error from Postmark
+  // "No Account or Server API tokens were supplied in the HTTP headers.
+  // Please add a header for either X-Postmark-Server-Token or
+  // X-Postmark-Account-Token."
+  if response.status().eq(&422) 
+  && 10.eq(&json_value["ErrorCode"]) {
+    panic!("Postmark Error: {:#?}, {}:{}", json_value, file!(), line!());
+  }
+
+  // Patch error from Postmark
+  if response.status().eq(&422) 
+  && 300.eq(&json_value["ErrorCode"]) {
+    panic!("Postmark Error: {:#?}, {}:{}", json_value, file!(), line!());
+  }
+
   // Patch for success from Slack
   if response.status().eq(&200) 
   && 0.eq(&json_value["ErrorCode"])
