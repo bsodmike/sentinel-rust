@@ -1,5 +1,6 @@
 use std::io;
 use serde_json::error;
+use crate::url::ParseError::{RelativeUrlWithoutBase};
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -8,7 +9,7 @@ pub enum Error {
   Hyper(hyper::Error),
   HyperHTTP(hyper::http::Error),
   Serde(error::Error),
-  Sqlx(sqlx::Error),
+  Sqlx(String),
   Log4rs(log4rs::config::Errors),
   Log(log::SetLoggerError),
   /// Errors that do not fit under the other types
@@ -44,7 +45,10 @@ impl From<error::Error> for Error {
 
 impl From<sqlx::Error> for Error {
   fn from(err: sqlx::Error) -> Error {
-    Error::Sqlx(err)
+    match err {
+      sqlx::Error::UrlParse(RelativeUrlWithoutBase) => Error::Sqlx(format!("Valid MySQL URL string missing in config! {:?}", err)),
+      _ => Error::Sqlx(format!("Sqlx Error: {:?}", err))
+    }
   }
 }
 

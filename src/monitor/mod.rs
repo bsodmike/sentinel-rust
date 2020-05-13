@@ -194,7 +194,10 @@ pub async fn begin_watch() -> Result<(), Error>{
     if enable_mock_data {
       query_data = dbslave::fetch_mocked::<dbslave::ConnectorMysql, Result<dbslave::DBSlaveStatus, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
     } else {
-      query_data = dbslave::fetch::<dbslave::ConnectorMysql, Result<dbslave::DBSlaveStatus, Error>>(dbslave::ConnectorMysql{}).await.unwrap();
+      query_data = match dbslave::fetch::<dbslave::ConnectorMysql, Result<dbslave::DBSlaveStatus, Error>>(dbslave::ConnectorMysql{}).await {
+        Ok(val) => val,
+        Err(error) => panic!("Err: {:?}, {}:{}", error, file!(), line!())
+      };
     }
 
     // let db_status = check_dbslave(&query_data).await.unwrap();
