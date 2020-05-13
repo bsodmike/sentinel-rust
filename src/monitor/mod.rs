@@ -26,12 +26,6 @@ pub struct Alert<DataType> {
   pub created_at: String,
 }
 
-/// FIXME needs usage
-// #[derive(Default, Debug)]
-// pub enum Alerts {
-//   DBSlave(Alert<dbslave::DBSlaveStatus>),
-// }
-
 #[derive(Default, Debug)]
 pub struct SentAlerts {
   pub sent_queue: VecDeque<Alert<dbslave::DBSlaveStatus>>
@@ -92,7 +86,7 @@ impl Sender {
 
 impl RtmClient {
   /// Runs the message receive loop
-  pub fn get_client<T: EventHandler>(handler: &mut T) -> Result<RtmClient, Error> {
+  pub fn get_client<T: EventHandler>(_: &mut T) -> Result<RtmClient, Error> {
     // setup channels for passing messages
     let (tx, rx) = mpsc::channel::<Alert<dbslave::DBSlaveStatus>>();
     let sender = Sender {
@@ -326,10 +320,10 @@ pub async fn begin_watch() -> Result<(), Error>{
 
       if queue_len > 0 {
         let current_alert = queue.queue.remove(0);
-
         let sender = r_client.sender().clone();
+        
         // Thread
-        let handle = thread::spawn(move || {
+        let _ = thread::spawn(move || {
           info!("spawn thread: ...");
           
           match sender.send_message(current_alert) {
@@ -340,6 +334,7 @@ pub async fn begin_watch() -> Result<(), Error>{
         });
 
         // Disabled to prevent blocking the Main thread.
+        // let handle = _;
         // handle.join().unwrap();
       } else if queue_len <= 0 {
         loop_done = true;
@@ -348,14 +343,7 @@ pub async fn begin_watch() -> Result<(), Error>{
 
     info!("🚀🚀🚀 Queue is now empty! et voilà! Elapsed {:#?}\n\n{:#?}", now.elapsed(), queue);
 
-    // Main thread
-    for i in 1..20 {
-      // println!("Main thread: {}!", i);
-      thread::sleep(time::Duration::from_millis(1));
-    }
-    info!("Main thread loop end / Elapsed {:#?}", now.elapsed());
-
-    // Notification processing loop
+    // Main thread: Notification processing loop
     let mut done = false;
     while !done {
       for alert in r_client.rx.try_iter() {

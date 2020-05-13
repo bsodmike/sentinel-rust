@@ -77,6 +77,7 @@ pub fn timestamp_as_rfc2822_from_utc(utc: DateTime<Utc>) -> String {
   utc.to_rfc2822()
 }
 
+#[allow(dead_code)]
 fn time_since_epoch_in_millis() -> u128 {
   let start = SystemTime::now();
   let since_the_epoch = start.duration_since(UNIX_EPOCH)
