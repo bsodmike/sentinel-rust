@@ -5,16 +5,15 @@
 For development purposes:
 
 ```
-cargo run
+RUST_BACKTRACE=1 cargo run
 ```
 
-Building a production release with:
+Building a production release with by specifying available CPU threads `cargo build -j <NUM_CPU_THREADS> --release`
 
 ```
-cargo build -j <NUM_CPU_THREADS> --release
-
 # First, configure `./conf/production/config.yml`
-$ RUN_MODE=production ./sentinel
+$ cargo build --all-features --release
+$ RUST_BACKTRACE=1 RUN_MODE=production ./target/release/sentinel --verbose
 ```
 
 ## Tests

@@ -60,9 +60,9 @@ pub trait Fetch<ReturnType> {
 }
 
 #[async_trait]
-impl Fetch<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
+impl Fetch<Result<DBSlaveStatus, Error>> for ConnectorMysql
 {
-  async fn fetch_dbslave_status(&self) -> Result<Vec<DBSlaveStatus>, Error> {
+  async fn fetch_dbslave_status(&self) -> Result<DBSlaveStatus, Error> {
     let mysql_url: String = configure::fetch::<String>(String::from("mysql_url")).unwrap();
     let pool = sqlx::MySqlPool::builder()
       .build(&mysql_url[..]).await?;
@@ -70,11 +70,12 @@ impl Fetch<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
 
     let sql = "SHOW SLAVE STATUS";
     let mut cursor = sqlx::query(sql).fetch(&pool);
-    let mut result = Vec::new();
+    let mut result: DBSlaveStatus = DBSlaveStatus::default();
+
     while let Some(row) = cursor.next().await? {
 
       let mut alert_state: bool = false;
-      let mut seconds_behind_master: String = String::from("0");
+      let seconds_behind_master: String = String::from("0");
       let read_behind_master = match row.try_get::<String, &str>("Seconds_Behind_Master") {
         Ok(val) => val,
         _ => {
@@ -88,7 +89,7 @@ impl Fetch<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
           };
           alert_state = true;
 
-          String::from("0")
+          seconds_behind_master
         }
       };
 
@@ -105,7 +106,7 @@ impl Fetch<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
         seconds_behind_master: read_behind_master,
       };
 
-      result.push(data);
+      result = data;
     }
     
     Ok(result)
@@ -135,15 +136,15 @@ pub trait FetchMock<ReturnType> {
 }
 
 #[async_trait]
-impl FetchMock<Result<Vec<DBSlaveStatus>, Error>> for ConnectorMysql
+impl FetchMock<Result<DBSlaveStatus, Error>> for ConnectorMysql
 {
-  async fn fetch_mock_status(&self) -> Result<Vec<DBSlaveStatus>, Error> {
+  async fn fetch_mock_status(&self) -> Result<DBSlaveStatus, Error> {
     let mut status = DBSlaveStatus::default();
     status.slave_io_running = String::from("Yes");
     status.slave_sql_running = String::from("Yes");
     status.seconds_behind_master = String::from("320");
 
-    Ok(vec![status])
+    Ok(status)
   }
 }
 

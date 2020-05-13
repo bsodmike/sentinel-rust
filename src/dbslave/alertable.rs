@@ -1,7 +1,6 @@
 use crate::errors::Error;
 use crate::dbslave;
 use chrono::{Utc};
-use std::panic;
 use crate::utils;
 
 pub async fn run(slave_data: &mut dbslave::DBSlaveStatus) -> Result<(bool, String), Error> {
