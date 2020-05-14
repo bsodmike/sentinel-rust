@@ -1,2 +1,2 @@
-pub mod slack;
 pub mod postmark;
+pub mod slack;
