@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -e
+
+notify_failure() {
+  curl "https://api.postmarkapp.com/email" \
+    -X POST \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json" \
+    -H "X-Postmark-Server-Token: {{ postmark_server_api_token }}" \
+    -d "{From: 'notifications@example.com', To: 'you@example.com', Subject: '[`hostname`] Sentinel failed', TextBody: 'Hello,\n\nSentinel failed due to error on line number $1.'}"
+}
+trap 'notify_failure $LINENO' ERR
+
+function cleanup {
+  rm "$temp_file"
+}
+trap cleanup EXIT
+
+workspace={{ release_build_path }}
+timestamp=$(date +%F.%T.%N | tr ':-' '.')
+
+touch $workspace/log/sentinel_${timestamp}.log
+output_log=$workspace/log/sentinel_${timestamp}.log
+
+cd {{ release_build_path }}
+# blocking process
+RUST_BACKTRACE=1 RUST_ENV=production {{ release_build_path }}/sentinel > output_log
+

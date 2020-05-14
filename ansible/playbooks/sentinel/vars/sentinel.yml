@@ -1,0 +1,9 @@
+---
+  crate: sentinel
+  crate_user: sentinel
+  crate_user_home: /home/sentinel
+  crate_repo: "git@github.com:bsodmike/sentinel-rust.git"
+  crate_path: "{{ crate_user_home }}/sentinel-rust"
+  crate_version: "master"
+  release_build_path: "{{ crate_path }}/target/release"
+  release_build: "{{ release_build_path }}/sentinel"

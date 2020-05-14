@@ -1,0 +1,171 @@
+---
+  - include_vars: vars/sentinel.yml
+
+  - name: Install rustup
+    block:
+      - name: add crate user
+        user: >
+          name={{ crate_user }}
+          comment="Sentinel user"
+          home={{ crate_user_home }}
+          shell=/bin/bash
+
+      - name: Create /home/sentinel/.ansible/tmp if it does not exist
+        file:
+          path: "{{ crate_user_home }}/.ansible/tmp"
+          state: directory
+          mode: '0755'
+          owner: "{{ crate_user }}"
+          group: "{{ crate_user }}"
+          recurse: yes
+
+      - name: install rustup
+        shell: curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain stable -y
+        args:
+          chdir: "{{ crate_user_home }}"
+        become: yes
+        become_user: sentinel
+
+      - name: "{{ crate }} : install toolchain"
+        command: "{{ crate_user_home }}/.cargo/bin/rustup toolchain install stable-x86_64-unknown-linux-gnu"
+        args:
+          chdir: "{{ crate_path }}"
+        become: yes
+        become_user: sentinel
+        
+    when: inventory_hostname == 'dbslave'
+
+  - name: Clone, configure and start Sentinel for host monitoring
+    block:
+      - name: "{{ crate }} : add crate user"
+        user: >
+          name={{ crate_user }}
+          comment="Sentinel user"
+          home={{ crate_user_home }}
+          shell=/bin/bash
+    
+      - name: "{{ crate }} : get currently deployed git SHA"
+        command: >
+          git rev-parse --verify HEAD
+          chdir={{ crate_path }}
+        register: current_git_sha
+        changed_when: false
+        ignore_errors: true
+        check_mode: no
+      
+      - name: "{{ crate }} : add github.com as known_host"
+        known_hosts: >
+          path=/etc/ssh/ssh_known_hosts
+          name=github.com
+          key={{ lookup('pipe', 'ssh-keyscan -T10 -trsa github.com') }}
+
+      - name: "{{ crate }} : checkout code"
+        git: >
+          repo={{ crate_repo }}
+          dest={{ crate_path }}
+          version={{ crate_version }}
+          depth=1
+          force=true
+      
+      - name: "{{ crate }} : give ownership of code to crate user"
+        file: >
+          path={{ crate_path }}/..
+          owner={{ crate_user }}
+          group={{ crate_user }}
+          recurse=true
+      
+      - name: "{{ crate }} : Install a list of required system packages"
+        apt:
+          pkg:
+          - build-essential
+          - openssl
+          - libssl-dev
+          - pkg-config
+
+      - name: "{{ crate }} : set permisions on {{ release_build_path }}"
+        file:
+          path: "{{ release_build_path }}"
+          state: directory
+          mode: '0750'
+          owner: "{{ crate_user }}"
+          group: "{{ crate_user }}"
+          recurse: yes
+
+      - name: "{{ crate }} : build release binary"
+        command: "{{ crate_user_home }}/.cargo/bin/cargo build --all-features --release"
+        args:
+          chdir: "{{ crate_path }}"
+        become: yes
+        become_user: sentinel
+        notify: restart sentinel
+
+      - name: "{{ crate }} : set permisions on {{ release_build_path }}/sentinel"
+        file:
+          path: "{{ release_build_path }}/sentinel"
+          state: file
+          mode: '0550'
+          owner: "{{ crate_user }}"
+          group: "{{ crate_user }}"
+
+      - name: "{{ crate }} : create {{ release_build_path }}/conf/production if it does not exist"
+        file:
+          path: "{{ release_build_path }}/conf/production"
+          state: directory
+          mode: '0550'
+          owner: "{{ crate_user }}"
+          group: "{{ crate_user }}"
+          recurse: yes
+
+      - name: "{{ crate }} : template config to {{ release_build_path }}/conf/production/config.yml"
+        template:
+          src: config.yml
+          dest: "{{ release_build_path }}/conf/production/config.yml"
+          owner: "{{ crate_user }}"
+          group: "{{ crate_user }}"
+
+      - name: "{{ crate }} : replace mysql config to {{ release_build_path }}/conf/production/config.yml"
+        lineinfile:
+          path: "{{ release_build_path }}/conf/production/config.yml"
+          regexp: 'mysql_url'
+          line: '  mysql_url: "mysql://root:{{ mysql_root_password }}@localhost:3306"'
+
+      - name: "{{ crate }} : template script to {{ release_build_path }}/runner.sh"
+        template:
+          src: sentinel_runner.sh.j2
+          dest: "{{ release_build_path }}/runner.sh"
+          mode: '0550'
+          owner: "{{ crate_user }}"
+          group: "{{ crate_user }}"
+
+      - name: "{{ crate }} : copy systemd configs"
+        template:
+          src: sentinel.service.j2
+          dest: "/lib/systemd/system/{{ crate_user }}.service"
+
+      - name: "{{ crate }} : enable systemd configs to start service after a reboot"
+        command: "systemctl enable {{ crate_user }}"
+
+      - name: "{{ crate }} : enable and start service sentinel"
+        service:
+          name: "{{ crate_user }}"
+          state: started
+
+    when: inventory_hostname == 'dbslave'
+
+  - name: Configure logrotate for Sentinel logs
+    block:
+      - name: "{{ crate }} : install logrotate"
+        apt:
+          name: logrotate
+          update_cache: true
+        register: apt_status
+        until: apt_status is success
+        delay: 6
+        retries: 10
+                
+      - name: "{{ crate }} : copy logrotate configuration"
+        template:
+          src: sentinel.logrotate.j2
+          dest: "/etc/logrotate.d/{{ crate_user }}"
+
+    when: inventory_hostname == 'dbslave'
