@@ -1,0 +1,14 @@
+# Ensure this file is encrypted once configured using `ansible-vault`
+--- 
+  debug: false
+  cli_options: false
+  slack_url: ""
+  postmark_server_token: ""
+  postmark_from: ""
+  postmark_replyto: ""
+  postmark_to: ""
+  mysql_url: "mysql://user:pass@ip:port"
+  main_thread_pause: "120000"
+  antispam_threshold: "5"
+  enable_mock_data: false
+  enable_mock_notifications: false

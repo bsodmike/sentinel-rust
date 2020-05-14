@@ -1,0 +1,20 @@
+[Unit]
+Description={{ crate_user }}
+After=syslog.target network.target
+
+[Service]
+Type=simple
+WorkingDirectory={{ release_build_path }}
+ExecStart={{ release_build_path }}/runner.sh
+User={{ crate_user }}
+Group={{ crate_user }}
+UMask=0002
+Environment=HOME={{ crate_user_home }}
+
+RestartSec=1
+Restart=on-failure
+
+SyslogIdentifier={{ crate_user }}
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,5 @@
+---
+  - name: restart sentinel
+    service:
+      name: "{{ crate_user }}"
+      state: restarted
