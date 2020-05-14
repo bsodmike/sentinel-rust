@@ -117,7 +117,7 @@ async fn dbslave_notification_template(message: &str) -> Result<String, Error>{
           "type": "section",
           "text": {
             "type": "mrkdwn",
-            "text":  "Hello, this is a test broadcast from your friendly *Sentinel*."#));
+            "text":  "Hello, this is an alert from your friendly *Sentinel*❗️"#));
     template.push_str(&message);
     template.push_str(&String::from(r#""
           }
