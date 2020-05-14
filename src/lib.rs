@@ -15,12 +15,11 @@ extern crate log4rs;
 extern crate regex;
 extern crate url;
 
-pub mod alerts;
 pub mod configure;
-pub mod dbslave;
 pub mod errors;
 pub mod monitor;
 pub mod opts;
+pub mod runner;
 pub mod services;
 pub mod utils;
 pub mod wrappers;
@@ -28,10 +27,16 @@ pub mod wrappers;
 use config::*;
 use glob::glob;
 use once_cell::sync::Lazy;
+use std::error;
+#[macro_use]
+use crate::log::LevelFilter;
+use crate::log4rs::append::file::FileAppender;
+use crate::log4rs::config::{Appender, Config, Root};
+use crate::log4rs::encode::pattern::PatternEncoder;
 
 pub static CONFIG: Lazy<config::Config> = Lazy::new(|| {
     let mut glob_path = "conf/development/*";
-    let mut settings = Config::default();
+    let mut settings = config::Config::default();
 
     let run_mode = match std::env::var("RUST_ENV") {
         Ok(value) => value,
@@ -53,3 +58,19 @@ pub static CONFIG: Lazy<config::Config> = Lazy::new(|| {
         .unwrap();
     settings
 });
+
+pub async fn run() -> Result<(), Box<dyn error::Error>> {
+    // Prep Logging
+    let logfile = FileAppender::builder()
+        .encoder(Box::new(PatternEncoder::new(
+            "{l}: {d(%Y-%m-%d %H:%M:%S %Z)(utc)} - Line {L} File {f} - {m}\n",
+        )))
+        .build("log/info.log")?;
+    let config = Config::builder()
+        .appender(Appender::builder().build("logfile", Box::new(logfile)))
+        .build(Root::builder().appender("logfile").build(LevelFilter::Info))?;
+    log4rs::init_config(config);
+
+    crate::runner::run().await;
+    Ok(())
+}
