@@ -1,5 +1,5 @@
 pub mod queue;
 
 pub struct QueryAlert {
-  pub warning: String,
+    pub warning: String,
 }
