@@ -17,7 +17,7 @@ extern crate url;
 
 pub mod configure;
 pub mod errors;
-pub mod monitor;
+pub mod monitors;
 pub mod opts;
 pub mod runner;
 pub mod services;
