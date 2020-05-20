@@ -20,10 +20,15 @@ trap cleanup EXIT
 workspace={{ release_build_path }}
 timestamp=$(date +%F.%T.%N | tr ':-' '.')
 
-touch $workspace/log/sentinel_${timestamp}.log
-output_log=$workspace/log/sentinel_${timestamp}.log
+log_filename=sentinel_output.log
+log_path=$workspace/log
+log_file=${log_path}/${log_filename}
+
+# ensure log file exists
+touch log_file
 
 cd {{ release_build_path }}
 # blocking process
-RUST_BACKTRACE=1 RUST_ENV=production {{ release_build_path }}/sentinel > output_log
+RUST_BACKTRACE=1 RUST_ENV=production {{ release_build_path }}/sentinel > log_file
+
 
