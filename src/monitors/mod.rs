@@ -12,11 +12,16 @@ pub enum State {
     Unknown,
 }
 
-#[derive(Copy, Clone)]
-pub enum Alerts {
+#[derive(Debug, Copy, Clone)]
+pub enum AlertContext {
     PollFailure,
-    StateChange,
+    StateChange(State),
     UnknownFailure,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct PollAlert {
+    alert_context: AlertContext,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -30,12 +35,14 @@ pub struct PollMySQLDBSlave;
 
 pub trait Monitorable {
     fn info(&self) -> String;
-    fn poll(&self);
+    fn poll<'a>(&mut self, alert: &'a mut PollAlert) -> &'a mut PollAlert;
 }
 
+#[derive(Copy, Clone)]
 pub struct Monitor<T> {
     context: T,
-    state: State,
+    current_state: State,
+    previous_state: State,
 }
 
 pub struct Monitored {
@@ -95,8 +102,17 @@ pub async fn run() -> Result<(), Box<dyn error::Error>> {
     println!("Monitored: {:#?}", &monitored);
     println!("Enabled monitor count: {}", &monitored.enabled.len());
 
-    for item in monitored.enabled.iter() {
-        item.poll();
+    let mut alert: PollAlert = PollAlert {
+        alert_context: AlertContext::StateChange(State::Unknown),
+    };
+    for item in monitored.enabled.iter_mut() {
+        item.poll(&mut alert);
+    }
+
+    // Simulate a state change
+    for item in monitored.enabled.iter_mut() {
+        let alert = item.poll(&mut alert);
+        println!("Alert: {:#?}", &alert);
     }
 
     info!("monitors::run()");
