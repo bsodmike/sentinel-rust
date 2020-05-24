@@ -1,3 +1,4 @@
+use crate::wrappers::chrono::WrappedDateTime;
 use std::default::Default;
 use std::error;
 use std::fmt;
@@ -19,9 +20,10 @@ pub enum AlertContext {
     UnknownFailure,
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct PollAlert {
+#[derive(Copy, Clone)]
+pub struct PollAlert<T> {
     alert_context: AlertContext,
+    cx: Monitor<T>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -33,9 +35,13 @@ pub struct PollHTTPStatusOk;
 #[derive(Debug, Copy, Clone)]
 pub struct PollMySQLDBSlave;
 
+pub trait Pollable {
+    fn debug(&self) -> String;
+}
+
 pub trait Monitorable {
     fn info(&self) -> String;
-    fn poll<'a>(&mut self, alert: &'a mut PollAlert) -> &'a mut PollAlert;
+    fn poll<'a>(&mut self) -> Box<dyn Pollable>;
 }
 
 #[derive(Copy, Clone)]
@@ -43,6 +49,8 @@ pub struct Monitor<T> {
     context: T,
     current_state: State,
     previous_state: State,
+    current_state_timestamp: WrappedDateTime,
+    previous_state_timestamp: WrappedDateTime,
 }
 
 pub struct Monitored {
@@ -60,6 +68,12 @@ impl Default for Monitored {
         Monitored {
             enabled: Vec::new(),
         }
+    }
+}
+
+impl fmt::Display for AlertContext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
@@ -102,17 +116,14 @@ pub async fn run() -> Result<(), Box<dyn error::Error>> {
     println!("Monitored: {:#?}", &monitored);
     println!("Enabled monitor count: {}", &monitored.enabled.len());
 
-    let mut alert: PollAlert = PollAlert {
-        alert_context: AlertContext::StateChange(State::Unknown),
-    };
     for item in monitored.enabled.iter_mut() {
-        item.poll(&mut alert);
+        item.poll();
     }
 
     // Simulate a state change
     for item in monitored.enabled.iter_mut() {
-        let alert = item.poll(&mut alert);
-        println!("Alert: {:#?}", &alert);
+        let alert = item.poll();
+        println!("Alert: {}", &alert.debug());
     }
 
     info!("monitors::run()");
