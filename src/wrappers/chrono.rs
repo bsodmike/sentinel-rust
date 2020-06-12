@@ -1,7 +1,7 @@
 use crate::utils;
 use chrono::{Duration, NaiveDateTime, Utc};
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct WrappedDateTime(chrono::DateTime<chrono::Utc>);
 
 impl WrappedDateTime {
