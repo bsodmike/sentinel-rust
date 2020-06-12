@@ -1,4 +1,5 @@
 use crate::wrappers::chrono::WrappedDateTime;
+use std::any::Any;
 use std::default::Default;
 use std::error;
 use std::fmt;
@@ -54,7 +55,7 @@ pub struct Monitor<T> {
 }
 
 pub struct Monitored {
-    pub enabled: Vec<Box<dyn Monitorable>>,
+    pub enabled: Vec<Box<dyn Any>>,
 }
 
 impl Default for State {
@@ -117,13 +118,26 @@ pub async fn run() -> Result<(), Box<dyn error::Error>> {
     println!("Enabled monitor count: {}", &monitored.enabled.len());
 
     for item in monitored.enabled.iter_mut() {
-        item.poll();
+        if let Some(x) = item.downcast_mut::<Monitor<PollHTTPBodyContent>>() {
+            x.poll();
+        }
+
+        if let Some(x) = item.downcast_mut::<Monitor<PollHTTPStatusOk>>() {
+            x.poll();
+        }
     }
 
     // Simulate a state change
     for item in monitored.enabled.iter_mut() {
-        let alert = item.poll();
-        println!("Alert: {}", &alert.debug());
+        if let Some(x) = item.downcast_mut::<Monitor<PollHTTPBodyContent>>() {
+            let alert = x.poll();
+            println!("Alert: {}", &alert.debug());
+        }
+
+        if let Some(x) = item.downcast_mut::<Monitor<PollHTTPStatusOk>>() {
+            let alert = x.poll();
+            println!("Alert: {}", &alert.debug());
+        }
     }
 
     info!("monitors::run()");
