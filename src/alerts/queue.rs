@@ -47,8 +47,8 @@ where
     Ok(main_queue)
 }
 
-impl SentAlerts {
-    pub async fn initialise() -> Result<SentAlerts, Error> {
+impl<DBSlaveStatus> SentAlerts<DBSlaveStatus> {
+    pub async fn initialise() -> Result<SentAlerts<DBSlaveStatus>, Error> {
         let vec: VecDeque<Alert<DBSlaveStatus>> = VecDeque::new();
 
         let sent_queue = SentAlerts { sent_queue: vec };

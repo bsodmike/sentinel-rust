@@ -27,8 +27,8 @@ pub struct Alert<DataType> {
 }
 
 #[derive(Default, Debug)]
-pub struct SentAlerts {
-    pub sent_queue: VecDeque<Alert<dbslave::DBSlaveStatus>>,
+pub struct SentAlerts<T> {
+    pub sent_queue: VecDeque<Alert<T>>,
 }
 
 // Handler
