@@ -20,8 +20,8 @@ use std::{thread, time};
 mod notify;
 
 #[derive(Default, Debug)]
-pub struct Alert<DataType> {
-    data: DataType,
+pub struct Alert<T> {
+    data: T,
     template: String,
     pub created_at: String,
 }

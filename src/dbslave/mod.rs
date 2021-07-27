@@ -1,9 +1,11 @@
 use crate::alerts;
+use crate::monitor::{Alert, SentAlerts};
 use crate::configure;
 use crate::errors::Error;
 use crate::sqlx::Cursor;
 use crate::sqlx::Row;
 use async_trait::async_trait;
+use std::collections::VecDeque;
 use std::panic;
 
 pub mod alertable;
@@ -157,4 +159,24 @@ where
     ConnectorType: FetchMock<ReturnType>,
 {
     connector.fetch_mock_status().await
+}
+
+impl<DBSlaveStatus> SentAlerts<DBSlaveStatus> {
+    pub async fn initialise() -> Result<SentAlerts<DBSlaveStatus>, Error> {
+        let vec: VecDeque<Alert<DBSlaveStatus>> = VecDeque::new();
+
+        let sent_queue = SentAlerts { sent_queue: vec };
+
+        Ok(sent_queue)
+    }
+
+    pub async fn add(&mut self, alert: Alert<DBSlaveStatus>) -> Result<(), Error> {
+        self.sent_queue.push_back(alert);
+
+        Ok(())
+    }
+
+    pub async fn sent(&mut self) -> Result<&VecDeque<Alert<DBSlaveStatus>>, Error> {
+        Ok(&self.sent_queue)
+    }
 }

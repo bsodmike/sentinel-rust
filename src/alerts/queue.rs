@@ -1,27 +1,26 @@
 use crate::dbslave::DBSlaveStatus;
 use crate::errors::Error;
 use crate::monitor::{Alert, SentAlerts};
-use std::collections::VecDeque;
 use std::fmt;
 
 #[derive(Default)]
-pub struct AlertQueue<DataType> {
-    pub queue: Vec<Alert<DataType>>,
+pub struct AlertQueue<T> {
+    pub queue: Vec<Alert<T>>,
 }
 
-impl<DataType> fmt::Debug for AlertQueue<DataType>
+impl<T> fmt::Debug for AlertQueue<T>
 where
-    DataType: fmt::Debug,
+    T: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AlertQueue<DataType>")
+        f.debug_struct("AlertQueue<T>")
             .field("queue", &self.queue)
             .finish()
     }
 }
 
-impl<DataType> AlertQueue<DataType> {
-    pub async fn add(&mut self, item: Alert<DataType>) -> Result<(), Error> {
+impl<T> AlertQueue<T> {
+    pub async fn add(&mut self, item: Alert<T>) -> Result<(), Error> {
         self.queue.insert(0, item);
 
         Ok(())
@@ -31,38 +30,20 @@ impl<DataType> AlertQueue<DataType> {
         Ok(self.queue.len())
     }
 
-    pub fn take_first(&mut self) -> Result<Alert<DataType>, Error> {
+    pub fn take_first(&mut self) -> Result<Alert<T>, Error> {
         let first = self.queue.remove(0);
 
         Ok(first)
     }
 }
 
-pub async fn add<DataType>() -> Result<AlertQueue<DataType>, Error>
+pub async fn add<T>() -> Result<AlertQueue<T>, Error>
 where
-    DataType: Default + fmt::Debug,
+    T: Default + fmt::Debug,
 {
-    let main_queue: AlertQueue<DataType> = AlertQueue::default();
+    let main_queue: AlertQueue<T> = AlertQueue::default();
 
     Ok(main_queue)
 }
 
-impl<DBSlaveStatus> SentAlerts<DBSlaveStatus> {
-    pub async fn initialise() -> Result<SentAlerts<DBSlaveStatus>, Error> {
-        let vec: VecDeque<Alert<DBSlaveStatus>> = VecDeque::new();
 
-        let sent_queue = SentAlerts { sent_queue: vec };
-
-        Ok(sent_queue)
-    }
-
-    pub async fn add(&mut self, alert: Alert<DBSlaveStatus>) -> Result<(), Error> {
-        self.sent_queue.push_back(alert);
-
-        Ok(())
-    }
-
-    pub async fn sent(&mut self) -> Result<&VecDeque<Alert<DBSlaveStatus>>, Error> {
-        Ok(&self.sent_queue)
-    }
-}
