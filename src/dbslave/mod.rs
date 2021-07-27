@@ -57,8 +57,8 @@ impl Default for DBSlaveStatus {
 }
 
 #[async_trait]
-pub trait Fetch<ReturnType> {
-    async fn fetch_dbslave_status<'a>(&'a self) -> ReturnType;
+pub trait Fetch<T> {
+    async fn fetch_dbslave_status<'a>(&'a self) -> T;
 }
 
 #[async_trait]
@@ -119,9 +119,9 @@ impl Fetch<Result<String, Error>> for ConnectorPostgres {
     }
 }
 
-pub async fn fetch<ConnectorType: 'static, ReturnType>(connector: ConnectorType) -> ReturnType
+pub async fn fetch<T: 'static, U>(connector: T) -> U
 where
-    ConnectorType: Fetch<ReturnType>,
+    T: Fetch<U>,
 {
     connector.fetch_dbslave_status().await
 }
@@ -129,8 +129,8 @@ where
 // MOCKED
 // TODO: Make this an integration test.
 #[async_trait]
-pub trait FetchMock<ReturnType> {
-    async fn fetch_mock_status<'a>(&'a self) -> ReturnType;
+pub trait FetchMock<T> {
+    async fn fetch_mock_status<'a>(&'a self) -> T;
 }
 
 #[async_trait]
@@ -152,11 +152,11 @@ impl FetchMock<Result<String, Error>> for ConnectorPostgres {
     }
 }
 
-pub async fn fetch_mocked<ConnectorType: 'static, ReturnType>(
-    connector: ConnectorType,
-) -> ReturnType
+pub async fn fetch_mocked<T: 'static, U>(
+    connector: T,
+) -> U
 where
-    ConnectorType: FetchMock<ReturnType>,
+    T: FetchMock<U>,
 {
     connector.fetch_mock_status().await
 }
